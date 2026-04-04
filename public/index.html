@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Sokratik Sandbox - Gelişmiş Fizik Laboratuvarı</title>
+    <style>
+        body { margin: 0; display: flex; height: 100vh; font-family: 'Segoe UI', sans-serif; background-color: #1e272e; color: white; overflow: hidden;}
+        
+        /* Sol Panel */
+        #ui-panel { width: 30%; background: #2f3640; display: flex; flex-direction: column; border-right: 3px solid #e1b12c; z-index: 10;}
+        #header { padding: 15px; background: #e1b12c; color: #2f3640; font-weight: bold; text-align: center; font-size: 18px;}
+        
+        #chat-history { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #353b48;}
+        .msg { padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.4;}
+        .ai-msg { background: #dcdde1; color: #2f3640; align-self: flex-start; border-bottom-left-radius: 0;}
+        .user-msg { background: #0097e6; color: white; align-self: flex-end; border-bottom-right-radius: 0;}
+        
+        #chat-input-area { display: flex; padding: 10px; background: #2f3640; }
+        input[type="text"] { flex: 1; padding: 10px; border: none; border-radius: 4px; outline: none; }
+        button.action-btn { background: #e1b12c; border: none; padding: 10px 15px; margin-left: 5px; cursor: pointer; font-weight: bold; border-radius: 4px;}
+
+        /* Kontroller */
+        #controls { padding: 15px; background: #2f3640; border-top: 2px solid #718093;}
+        .slider-group { margin-bottom: 15px;}
+        label { display: block; font-size: 13px; margin-bottom: 5px; color: #dcdde1; font-weight: bold;}
+        input[type="range"] { width: 100%; cursor: pointer;}
+        
+        .speed-controls { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; background: #353b48; padding: 10px; border-radius: 5px;}
+        .radio-group { display: flex; gap: 10px; font-size: 13px;}
+        
+        .launch-row { display: flex; gap: 10px; margin-bottom: 10px;}
+        button.launch-btn { flex: 3; padding: 15px; background: #e84118; color: white; border: none; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 5px; transition: 0.3s;}
+        button.launch-btn:hover { background: #c23616;}
+        button.erase-btn { flex: 1; background: #f1c40f; color: #2f3640; border: none; font-size: 14px; font-weight: bold; cursor: pointer; border-radius: 5px; transition: 0.3s;}
+        button.erase-btn:hover { background: #f39c12;}
+
+        .tools { display: flex; gap: 10px; }
+        .tools button { flex: 1; padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white;}
+        .btn-formula { background: #27ae60; }
+        .btn-report { background: #8e44ad; }
+
+        /* Sağ Panel (3D Canvas) */
+        #sim-container { width: 70%; position: relative;}
+        canvas { display: block; width: 100%; height: 100%;}
+        
+        /* Modal Ekranlar */
+        .modal { display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%; background: rgba(47, 54, 64, 0.95); border: 2px solid #e1b12c; border-radius: 10px; padding: 20px; box-sizing: border-box; overflow-y: auto; z-index: 100; color: white;}
+        .modal-close { float: right; cursor: pointer; color: #e74c3c; font-size: 24px; font-weight: bold;}
+        .modal h2 { margin-top: 0; color: #e1b12c;}
+        
+        #hud { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; color: #00a8ff; font-family: monospace; font-size: 14px; pointer-events: none;}
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="ui-panel">
+        <div id="header">🚀 Sokratik Eğitim Laboratuvarı</div>
+        
+        <div id="chat-history">
+            <div class="msg ai-msg">
+                Fizik laboratuvarına hoş geldin. Amacımız roketimizi 150m ilerideki platforma indirmek. Hız ve Açı değerlerini değiştirerek fırlat. Önceki atışların yörünge izlerini silgi (🧹) butonuyla temizleyebilir, zamanı yavaşlatabilirsin. Başarılar!
+            </div>
+        </div>
+        
+        <div id="chat-input-area">
+            <input type="text" id="userInput" placeholder="Yapay zekaya sor veya tartış..." onkeypress="if(event.key === 'Enter') sendChat()">
+            <button class="action-btn" onclick="sendChat()">Gönder</button>
+        </div>
+
+        <div id="controls">
+            <div class="slider-group">
+                <label>Fırlatma Açısı: <span id="angleVal">80</span>°</label>
+                <input type="range" id="angleSlider" min="10" max="90" value="80">
+            </div>
+            <div class="slider-group">
+                <label>İlk Hız (v0): <span id="thrustVal">50</span> m/s</label>
+                <input type="range" id="thrustSlider" min="10" max="80" value="50">
+            </div>
+            
+            <div class="speed-controls">
+                <label style="margin:0;">Simülasyon Hızı:</label>
+                <div class="radio-group">
+                    <input type="radio" id="spdNormal" name="simSpeed" value="normal" checked onchange="updateSimSpeed()"><label for="spdNormal">Normal</label>
+                    <input type="radio" id="spdSlow" name="simSpeed" value="slow" onchange="updateSimSpeed()"><label for="spdSlow">Yavaş Çekim</label>
+                </div>
+            </div>
+
+            <div class="launch-row">
+                <button class="launch-btn" onclick="launchRocket()">ATEŞLE</button>
+                <button class="erase-btn" onclick="eraseTrajectories()" title="Önceki Atışları Temizle">🧹 Sil</button>
+            </div>
+            
+            <div class="tools">
+                <button class="btn-formula" onclick="openModal('formulaModal')">📊 Formüller ve Vektörler</button>
+                <button class="btn-report" onclick="generateReport()">📄 Rapor Al</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="sim-container">
+        <div id="hud">
+            DURUM: BEKLİYOR<br>
+            Yükseklik (Y): 0.0 m<br>
+            Menzil (X): 0.0 m<br>
+            Süre (t): 0.00 s
+        </div>
+        <canvas id="sim-canvas"></canvas>
+
+        <div id="formulaModal" class="modal">
+            <span class="modal-close" onclick="closeModal('formulaModal')">&times;</span>
+            <h2>Fiziksel Analiz ve Formüller</h2>
+            <p>Eğik atış yapan bir cismin hareketi, yatay ve düşey olmak üzere iki boyutta incelenir.</p>
+            <ul>
+                <li><b>İlk Hız (v0):</b> <span id="f-v0">50</span> m/s</li>
+                <li><b>Fırlatma Açısı (θ):</b> <span id="f-angle">80</span>°</li>
+                <li><b>Yatay Hız Bileşeni (Vx):</b> v0 * cos(θ) = <span id="f-vx">8.7</span> m/s (Sürtünmesiz ortamda sabittir)</li>
+                <li><b>Düşey Hız Bileşeni (Vy):</b> v0 * sin(θ) - g*t (Yerçekimi nedeniyle sürekli değişir)</li>
+                <br>
+                <li><b>Maksimum Menzil (R) Formülü:</b> R = (v0² * sin(2θ)) / g</li>
+                <li><b>Yerçekimi İvmesi (g):</b> 9.8 m/s²</li>
+            </ul>
+            <p style="color:#f1c40f;"><b>Not:</b> Uçuş sırasında roketin üzerindeki <span style="color:#2ecc71;">YEŞİL ok hız vektörünü</span>, <span style="color:#f39c12;">SARI ok ise ivmeyi (yerçekimi)</span> gösterir.</p>
+        </div>
+
+        <div id="reportModal" class="modal">
+            <span class="modal-close" onclick="closeModal('reportModal')">&times;</span>
+            <h2>Akademik Laboratuvar Raporu</h2>
+            <div id="reportContent" style="background:#fff; color:#000; padding:15px; border-radius:5px;"></div>
+            <br>
+            <button class="action-btn" onclick="window.print()">Raporu PDF Olarak Kaydet</button>
+        </div>
+    </div>
+
+    <script>
+        // Global Değişkenler
+        let attempts = 0;
+        let lastDistance = 0;
+        let flightStatus = "Bekliyor";
+        let timeStep = 0.05; // Normal hız
+
+        // Chat ve API
+        async function sendChat() {
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+            if(!message) return;
+
+            addMsg('user-msg', message);
+            input.value = '';
+            addMsg('ai-msg', '⏳ Düşünüyor...', 'loading');
+
+            const currentContext = {
+                angle: document.getElementById('angleSlider').value,
+                thrust: document.getElementById('thrustSlider').value,
+                distance: lastDistance.toFixed(1),
+                status: flightStatus
+            };
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message, context: currentContext })
+                });
+                const data = await response.json();
+                document.getElementById('loading').remove();
+                addMsg('ai-msg', data.reply);
+            } catch (err) {
+                document.getElementById('loading').remove();
+                addMsg('ai-msg', 'Bağlantı hatası oluştu.');
+            }
+        }
+
+        function addMsg(type, text, id="") {
+            const div = document.createElement('div');
+            div.className = 'msg ' + type;
+            div.innerHTML = text;
+            if(id) div.id = id;
+            document.getElementById('chat-history').appendChild(div);
+            div.scrollIntoView();
+        }
+
+        // Arayüz Eventleri
+        document.getElementById('angleSlider').oninput = function() { 
+            document.getElementById('angleVal').innerText = this.value;
+            // Açıyı anlık olarak rokete yansıt (PhET özelliği)
+            if(!isLaunched) {
+                let theta = this.value * (Math.PI / 180);
+                rocket.rotation.z = -((Math.PI/2) - theta);
+            }
+            updateFormulas();
+        };
+        
+        document.getElementById('thrustSlider').oninput = function() { 
+            document.getElementById('thrustVal').innerText = this.value; 
+            updateFormulas();
+        };
+
+        function updateSimSpeed() {
+            let isSlow = document.getElementById('spdSlow').checked;
+            timeStep = isSlow ? 0.015 : 0.05; // Yavaş çekim hızı
+        }
+
+        function updateFormulas() {
+            let v = document.getElementById('thrustSlider').value;
+            let a = document.getElementById('angleSlider').value;
+            document.getElementById('f-v0').innerText = v;
+            document.getElementById('f-angle').innerText = a;
+            let vx = v * Math.cos(a * Math.PI / 180);
+            document.getElementById('f-vx').innerText = vx.toFixed(1);
+        }
+
+        function openModal(id) { document.getElementById(id).style.display = 'block'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        function generateReport() {
+            let content = "<h3>Eğik Atış Simülasyon Raporu</h3>";
+            content += "<p><b>Toplam Fırlatma Denemesi:</b> " + attempts + "</p>";
+            content += "<p><b>Son İstatistikler:</b> İlk Hız=" + document.getElementById('thrustSlider').value + "m/s, Fırlatma Açısı=" + document.getElementById('angleSlider').value + "°</p>";
+            content += "<h4>Öğrenci - Sokratik AI Tartışma Kaydı:</h4><hr>";
+            
+            let chatDivs = document.getElementById('chat-history').children;
+            for(let i=0; i<chatDivs.length; i++){
+                if(chatDivs[i].classList.contains('user-msg')) {
+                    content += "<p><b>Öğrenci:</b> " + chatDivs[i].innerText + "</p>";
+                } else if(chatDivs[i].classList.contains('ai-msg')) {
+                    content += "<p style='color:#555;'><b>AI Öğretmen:</b> " + chatDivs[i].innerText.replace('⏳ Düşünüyor...', '') + "</p>";
+                }
+            }
+            document.getElementById('reportContent').innerHTML = content;
+            openModal('reportModal');
+        }
+
+        // --- THREE.JS 3D ROKET SİMÜLASYONU ---
+        let scene, camera, renderer, controls;
+        let rocket, targetPad, particleSystem;
+        let velArrow, accArrow; // Vektör okları
+        let trajectories = []; // PhET gibi önceki atış izlerini tutar
+        let currentTrajectoryPoints = [];
+        let currentTrajectoryLine;
+        
+        let isLaunched = false;
+        let time = 0;
+        let v0, theta, startX, startY, startZ;
+        const gravity = 9.8;
+        const TARGET_X = 100; // Mesafe: 150m (Rampa -50'de)
+
+        init3D();
+        animate();
+
+        function createTextLabel(text) {
+            let canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 128;
+            let ctx = canvas.getContext('2d');
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, 256, 128);
+            ctx.font = "bold 36px Arial";
+            ctx.fillStyle = "black";
+            ctx.textAlign = "center";
+            ctx.fillText(text, 128, 75);
+            let texture = new THREE.CanvasTexture(canvas);
+            let spriteMat = new THREE.SpriteMaterial({ map: texture });
+            let sprite = new THREE.Sprite(spriteMat);
+            sprite.scale.set(15, 7.5, 1);
+            return sprite;
+        }
+
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); 
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth*0.7 / window.innerHeight, 0.1, 1000);
+            camera.position.set(25, 40, 160);
+
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('sim-canvas'), antialias: true });
+            renderer.setSize(window.innerWidth * 0.7, window.innerHeight);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(25, 0, 0); 
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            dirLight.position.set(50, 100, 50);
+            scene.add(dirLight);
+
+            // Zemin ve Yol Çizgisi
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.MeshLambertMaterial({color: 0x27ae60}));
+            ground.rotation.x = -Math.PI / 2;
+            scene.add(ground);
+            
+            const road = new THREE.Mesh(new THREE.PlaneGeometry(800, 15), new THREE.MeshLambertMaterial({color: 0x34495e}));
+            road.rotation.x = -Math.PI / 2;
+            road.position.y = 0.1;
+            scene.add(road);
+
+            // Fırlatma Rampası
+            const pad = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 2, 32), new THREE.MeshLambertMaterial({color: 0xbdc3c7}));
+            pad.position.set(-50, 1, 0);
+            scene.add(pad);
+
+            // Hedef Platform ve Metre Tabelası (PhET özelliği)
+            targetPad = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 2.1, 32), new THREE.MeshLambertMaterial({color: 0xe74c3c}));
+            targetPad.position.set(TARGET_X, 1, 0); 
+            scene.add(targetPad);
+            
+            let distLabel = createTextLabel("150.0 m");
+            distLabel.position.set(TARGET_X, 6, 0);
+            scene.add(distLabel);
+
+            // Roket
+            rocket = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 8, 16), new THREE.MeshLambertMaterial({color: 0xf1f2f6}));
+            body.position.y = 4;
+            const nose = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4, 16), new THREE.MeshLambertMaterial({color: 0xf39c12}));
+            nose.position.y = 10;
+            rocket.add(body); rocket.add(nose);
+            rocket.position.set(-50, 2, 0);
+            
+            // Başlangıç açısını rokete yansıt
+            let startTheta = document.getElementById('angleSlider').value * (Math.PI / 180);
+            rocket.rotation.z = -((Math.PI/2) - startTheta);
+            scene.add(rocket);
+
+            // Vektör Okları (Yeşil: Hız, Sarı: İvme)
+            velArrow = new THREE.ArrowHelper(new THREE.Vector3(1,1,0).normalize(), rocket.position, 10, 0x2ecc71);
+            accArrow = new THREE.ArrowHelper(new THREE.Vector3(0,-1,0), rocket.position, 10, 0xf1c40f);
+            velArrow.visible = false; accArrow.visible = false;
+            scene.add(velArrow); scene.add(accArrow);
+
+            // Parçacık Efekti
+            let pGeo = new THREE.BufferGeometry();
+            let pPos = new Float32Array(300 * 3); 
+            for(let i=0; i<pPos.length; i++) pPos[i] = 0;
+            pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+            let pMat = new THREE.PointsMaterial({color: 0xe67e22, size: 2.5, transparent: true, opacity: 0.8});
+            particleSystem = new THREE.Points(pGeo, pMat);
+            scene.add(particleSystem);
+
+            startX = rocket.position.x;
+            startY = rocket.position.y;
+            startZ = rocket.position.z;
+        }
+
+        function eraseTrajectories() {
+            if(isLaunched) return;
+            trajectories.forEach(t => scene.remove(t));
+            trajectories = [];
+            addMsg('sys-msg', '🧹 Tüm uçuş izleri temizlendi.', 'sys-msg');
+        }
+
+        function launchRocket() {
+            if(isLaunched) return;
+            
+            const angleDeg = parseFloat(document.getElementById('angleSlider').value);
+            v0 = parseFloat(document.getElementById('thrustSlider').value);
+            theta = angleDeg * (Math.PI / 180); 
+            
+            time = 0;
+            attempts++;
+            isLaunched = true;
+            flightStatus = "Uçuyor";
+            document.querySelector('.launch-btn').innerText = "HAVADA...";
+            document.querySelector('.launch-btn').style.background = "#f39c12";
+
+            velArrow.visible = true;
+            accArrow.visible = true;
+
+            // Yeni yörünge çizgisi oluştur
+            currentTrajectoryPoints = [];
+            let lineGeo = new THREE.BufferGeometry();
+            let lineMat = new THREE.LineBasicMaterial({color: 0x00a8ff, linewidth: 2});
+            currentTrajectoryLine = new THREE.Line(lineGeo, lineMat);
+            scene.add(currentTrajectoryLine);
+            trajectories.push(currentTrajectoryLine);
+        }
+
+        function resetRocket(statusMsg) {
+            isLaunched = false;
+            flightStatus = statusMsg.includes("HEDEFE ULAŞTI") ? "Başarılı" : "Çakıldı";
+            
+            rocket.position.set(startX, startY, startZ);
+            let finalTheta = document.getElementById('angleSlider').value * (Math.PI / 180);
+            rocket.rotation.z = -((Math.PI/2) - finalTheta);
+            
+            velArrow.visible = false;
+            accArrow.visible = false;
+
+            let positions = particleSystem.geometry.attributes.position.array;
+            for(let i=0; i<positions.length; i++) positions[i] = 0;
+            particleSystem.geometry.attributes.position.needsUpdate = true;
+
+            document.querySelector('.launch-btn').innerText = "YENİDEN ATEŞLE";
+            document.querySelector('.launch-btn').style.background = "#e84118";
+            
+            let promptMsg = `Roketim ${lastDistance.toFixed(1)} metreye düştü ve ${flightStatus.toLowerCase()}. Formüle göre neyi değiştirmeliyim?`;
+            addMsg('ai-msg', `💥 <b>${statusMsg}</b><br>Asistan analizi başlatılıyor...`, 'sys-msg');
+            document.getElementById('userInput').value = promptMsg;
+            sendChat();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            if (isLaunched) {
+                time += timeStep; 
+
+                // Kinematik
+                let dx = v0 * Math.cos(theta) * time;
+                let dy = (v0 * Math.sin(theta) * time) - (0.5 * gravity * time * time);
+
+                rocket.position.x = startX + dx;
+                rocket.position.y = startY + dy;
+                lastDistance = dx; 
+
+                // Açı güncellemeleri
+                let vx = v0 * Math.cos(theta);
+                let vy = v0 * Math.sin(theta) - (gravity * time);
+                let currentAngle = Math.atan2(vy, vx);
+                rocket.rotation.z = -( (Math.PI/2) - currentAngle );
+
+                // Vektörleri Güncelle
+                let velVector = new THREE.Vector3(vx, vy, 0);
+                velArrow.position.copy(rocket.position);
+                velArrow.setDirection(velVector.clone().normalize());
+                velArrow.setLength(velVector.length() / 2); // Hız büyüklüğüne göre uza
+
+                accArrow.position.copy(rocket.position);
+                // İvme (Yerçekimi) hep aşağı doğru sabittir
+                
+                // Yörünge İzini Çiz (Mavi çizgi)
+                currentTrajectoryPoints.push(new THREE.Vector3(rocket.position.x, rocket.position.y, rocket.position.z));
+                currentTrajectoryLine.geometry.setFromPoints(currentTrajectoryPoints);
+
+                // Parçacık (Ateş) Animasyonu
+                let positions = particleSystem.geometry.attributes.position.array;
+                for(let i=0; i<100; i++) {
+                    positions[i*3] = rocket.position.x + (Math.random() - 0.5)*2;
+                    positions[i*3+1] = rocket.position.y + (Math.random() - 0.5)*2;
+                    positions[i*3+2] = rocket.position.z + (Math.random() - 0.5)*2;
+                }
+                particleSystem.geometry.attributes.position.needsUpdate = true;
+
+                document.getElementById('hud').innerHTML = `
+                    DURUM: UÇUYOR 🚀<br>
+                    Yükseklik (Y): ${rocket.position.y.toFixed(1)} m<br>
+                    Menzil (X): ${dx.toFixed(1)} m<br>
+                    Süre (t): ${time.toFixed(2)} s
+                `;
+
+                if (rocket.position.y < 2 && time > 0.5) {
+                    let distanceToTarget = Math.abs(rocket.position.x - targetPad.position.x);
+                    
+                    if (distanceToTarget < 12) {
+                        document.getElementById('hud').innerHTML = `DURUM: 🟢 HEDEFE ULAŞTI!`;
+                        resetRocket("HEDEFE ULAŞTI!");
+                    } else {
+                        document.getElementById('hud').innerHTML = `DURUM: 🔴 ÇAKILDI!`;
+                        resetRocket("ÇAKILDI!");
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth*0.7 / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth*0.7, window.innerHeight);
+        });
+        
+        updateFormulas();
+    </script>
+</body>
+</html>
