@@ -13,7 +13,7 @@
         .msg { padding: 12px; border-radius: 8px; font-size: 14px; line-height: 1.4;}
         .ai-msg { background: #dcdde1; color: #2f3640; align-self: flex-start; border-bottom-left-radius: 0;}
         .user-msg { background: #0097e6; color: white; align-self: flex-end; border-bottom-right-radius: 0;}
-        .sys-msg { background: #f39c12; color: #2f3640; align-self: center; border-radius: 4px; font-size: 12px; font-weight: bold; padding: 8px;}
+        .sys-msg { background: #f39c12; color: #2f3640; align-self: center; border-radius: 4px; font-size: 12px; font-weight: bold; padding: 8px; text-align: center;}
         
         #chat-input-area { display: flex; padding: 10px; background: #2f3640; }
         input[type="text"] { flex: 1; padding: 10px; border: none; border-radius: 4px; outline: none; }
@@ -136,11 +136,11 @@
         let consecutiveFailures = 0; 
         let isCooldown = false; 
 
-        // Chat ve AI Fonksiyonları (Optimize Edildi)
+        // Chat ve AI Fonksiyonları
         async function sendChat(systemPromptOverride = null) {
             let message = "";
             
-            // Eğer sistemden gizli bir mesaj geliyorsa ekrana mavi balon olarak basma
+            // Eğer sistemden gizli bir mesaj geliyorsa ekrana kullanıcı baloncuğu basma
             if(systemPromptOverride) {
                 message = systemPromptOverride;
             } else {
@@ -171,7 +171,7 @@
                 document.getElementById('loading').remove();
                 addMsg('ai-msg', data.reply);
 
-                // Arayüz Tetikleyicileri
+                // Arayüz Tetikleyicileri (JSON Action Command)
                 if(data.action === "SHOW_MASS") {
                     document.getElementById('mass-container').style.display = 'block';
                     addMsg('sys-msg', '🔓 SİSTEM MESAJI: "Kütle Kontrolü" sürgüsü eklendi!');
@@ -181,8 +181,8 @@
                 }
 
             } catch (err) {
-                document.getElementById('loading').remove();
-                addMsg('ai-msg', 'Bağlantı hatası oluştu.');
+                if(document.getElementById('loading')) document.getElementById('loading').remove();
+                addMsg('ai-msg', 'Bağlantı hatası oluştu. Lütfen sayfayı yenileyin.');
             }
         }
 
@@ -307,9 +307,11 @@
             isCooldown = true; 
             
             if(statusMsg.includes("HEDEFE ULAŞTI")) {
-                flightStatus = "Başarılı"; consecutiveFailures = 0; 
+                flightStatus = "Başarılı"; 
+                consecutiveFailures = 0; 
             } else {
-                flightStatus = "Çakıldı"; consecutiveFailures++; 
+                flightStatus = "Çakıldı"; 
+                consecutiveFailures++; 
             }
             
             rocket.position.set(startX, startY, 0);
@@ -317,7 +319,7 @@
             velArrow.visible = false; accArrow.visible = false;
             let positions = particleSystem.geometry.attributes.position.array; for(let i=0; i<positions.length; i++) positions[i] = 0; particleSystem.geometry.attributes.position.needsUpdate = true;
 
-            // COOLDOWN UYGULAMASI (3 Saniye)
+            // COOLDOWN UYGULAMASI (3 Saniye Kilit)
             let launchBtn = document.querySelector('.launch-btn');
             launchBtn.style.background = "#7f8c8d";
             launchBtn.innerText = "DÜŞÜNÜLÜYOR... (3s)";
@@ -328,16 +330,22 @@
                 launchBtn.innerText = "YENİDEN ATEŞLE"; launchBtn.style.background = "#e84118";
             }, 3000);
             
-            // 3 HATA KURALI GİZLİ SİSTEM MESAJI
-            let promptMsg = `Roketim ${lastDistance.toFixed(1)} metreye düştü ve ${flightStatus.toLowerCase()}.`;
-            if (consecutiveFailures >= 3) {
-                promptMsg += ` [SİSTEM GİZLİ NOTU: Öğrenci üst üste ${consecutiveFailures} kez başarısız oldu. Doğrudan cevabı verme ama onu BİLİMSEL YÖNTEME davet et. Sadece bir değişkeni (hız veya açı) sabit tutmasını öner veya formüldeki 'Yatay Hıza' odaklanmasını sağla.]`;
+            // --- KADEMELİ SOKRATİK MÜDAHALE (1., 2. ve 3. Hata) ---
+            let promptMsg = `Roketim ${lastDistance.toFixed(1)} metreye düştü ve çakıldı.`;
+            
+            if (consecutiveFailures === 1) {
+                promptMsg += ` [SİSTEM GİZLİ NOTU: Öğrencinin İLK hatası. Asla hızı veya açıyı değiştirmesini önerme. Üzülme vb. kelimeler kullanma. Sadece "Sence roket neden hedefe varamadan yere düştü? Havada kalma süresini mi yoksa ileri gitme gücünü mü artırmalıyız?" gibi çok temel, ipucusu az bir Sokratik soru sor.]`;
+            } else if (consecutiveFailures === 2) {
+                promptMsg += ` [SİSTEM GİZLİ NOTU: Öğrencinin İKİNCİ hatası. Yine doğrudan cevap verme. "Atışların hedefe ulaşmıyor. Sence roketin yatayda daha çok yol alması için fırlatma eğimini nasıl ayarlamalıyız?" şeklinde bir tık daha belirgin bir soru sor.]`;
+            } else if (consecutiveFailures >= 3) {
+                promptMsg += ` [SİSTEM GİZLİ NOTU: Öğrenci 3. kez başarısız oldu. Hâlâ cevabı verme ama çok net bir BİLİMSEL YÖNTEM direktifi ver: "Sürekli farklı değerler denemek yerine hızı 60 m/s'de sabitleyelim ve sadece açıyı değiştirerek atışlar yapalım. Sence 60 hızda açı kaç olmalı?" de.]`;
             } else {
-                promptMsg += ` Sence neyi değiştirmeliyim?`;
+                // Başarılı olursa tetiklenecek kısım
+                promptMsg = `Roketim tam hedefe indi!`;
             }
             
             addMsg('sys-msg', `💥 <b>${statusMsg}</b>`);
-            sendChat(promptMsg); // Gizli mesajı AI'a yolla, ekrana kullanıcı mesajı olarak basma
+            sendChat(promptMsg); 
         }
 
         function animate() {
