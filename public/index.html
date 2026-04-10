@@ -20,7 +20,13 @@
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         label { display: block; font-size: 13px; margin-bottom: 5px; color: #dcdde1; font-weight: bold;}
         input[type="range"] { width: 100%; cursor: pointer;}
-        .launch-btn { width: 100%; padding: 15px; background: #e84118; color: white; border: none; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 5px; margin-top: 10px;}
+        
+        .speed-controls { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; background: #353b48; padding: 10px; border-radius: 5px;}
+        .radio-group { display: flex; gap: 10px; font-size: 13px;}
+        .launch-row { display: flex; gap: 10px; margin-bottom: 10px;}
+        button.launch-btn { flex: 3; padding: 15px; background: #e84118; color: white; border: none; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 5px; transition: 0.3s;}
+        button.erase-btn { flex: 1; background: #f1c40f; color: #2f3640; border: none; font-size: 14px; font-weight: bold; cursor: pointer; border-radius: 5px; transition: 0.3s;}
+        
         #sim-container { width: 70%; position: relative;}
         .modal { display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%; background: rgba(47, 54, 64, 0.95); border: 2px solid #e1b12c; border-radius: 10px; padding: 20px; z-index: 100;}
         #hud { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; color: #00a8ff; font-family: monospace; font-size: 14px; pointer-events: none;}
@@ -42,10 +48,23 @@
         <div id="controls">
             <div class="slider-group">
                 <label>Fırlatma Açısı: <span id="angleVal">45</span>°</label>
-                <input type="range" id="angleSlider" min="10" max="80" value="45">
+                <input type="range" id="angleSlider" min="10" max="80" value="45" oninput="updateAngleUI(this.value)">
             </div>
             <div id="dynamic-sliders"></div>
-            <button class="launch-btn" onclick="launchRocket()">ATEŞLE</button>
+            
+            <div class="speed-controls">
+                <label style="margin:0;">Simülasyon Hızı:</label>
+                <div class="radio-group">
+                    <input type="radio" id="spdNormal" name="simSpeed" value="normal" checked onchange="updateSimSpeed()"><label for="spdNormal">Normal</label>
+                    <input type="radio" id="spdSlow" name="simSpeed" value="slow" onchange="updateSimSpeed()"><label for="spdSlow">Yavaş</label>
+                </div>
+            </div>
+
+            <div class="launch-row">
+                <button class="launch-btn" onclick="launchRocket()">ATEŞLE</button>
+                <button class="erase-btn" onclick="eraseTrajectories()" title="Önceki Atışları Temizle">🧹 Sil</button>
+            </div>
+
             <button id="formulaBtn" style="display:none; width:100%; margin-top:10px; padding:10px; background:#27ae60; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:bold;" onclick="openModal()">📊 Formülleri İncele</button>
         </div>
     </div>
@@ -67,7 +86,16 @@
     <script>
         let attempts = 0, consecutiveFailures = 0, lastDistance = 0, flightStatus = "Bekliyor";
         let isCooldown = false, unlockedVariables = ["Fırlatma Açısı"];
-        let gravity = 9.8, v0 = 50; // Başlangıç fizik değerleri
+        let gravity = 9.8, v0 = 50, timeStep = 0.05;
+
+        function updateAngleUI(val) {
+            document.getElementById('angleVal').innerText = val;
+            if(!isLaunched) rocket.rotation.z = -((Math.PI/2) - (val * (Math.PI / 180)));
+        }
+
+        function updateSimSpeed() {
+            timeStep = document.getElementById('spdSlow').checked ? 0.015 : 0.05;
+        }
 
         // --- DINAMIK SLIDER YÖNETİMİ ---
         function createSlider(name) {
@@ -78,11 +106,11 @@
             group.className = 'slider-group';
             const cleanName = name.replace(/\s+/g, '-').toLowerCase();
             
-            // Fiziksel karşılığı olanları bağla, olmayanları dummy yap
             let min=1, max=100, val=50, unit="";
-            if(name.toLowerCase().includes("hız")) { min=10; max=100; val=50; unit=" m/s"; }
-            if(name.toLowerCase().includes("yerçekimi") || name.toLowerCase().includes("ivme")) { min=1; max=25; val=9.8; unit=" m/s²"; }
-            if(name.toLowerCase().includes("kütle") || name.toLowerCase().includes("ağırlık")) { min=1; max=1000; val=10; unit=" kg"; }
+            if(name.toLowerCase().includes("hız") || name.toLowerCase().includes("itme")) { min=10; max=100; val=50; unit=" m/s"; }
+            else if(name.toLowerCase().includes("yerçekimi") || name.toLowerCase().includes("ivme")) { min=1; max=25; val=9.8; unit=" m/s²"; }
+            else if(name.toLowerCase().includes("kütle") || name.toLowerCase().includes("ağırlık")) { min=1; max=1000; val=10; unit=" kg"; }
+            else { min=0; max=100; val=50; unit=""; } // Diğer tüm dene-gör değişkenleri
 
             group.innerHTML = `
                 <label>${name}: <span id="${cleanName}Val">${val}</span>${unit}</label>
@@ -94,7 +122,7 @@
 
         function updateValue(id, val, originalName) {
             document.getElementById(id + 'Val').innerText = val;
-            if(originalName.toLowerCase().includes("hız")) v0 = parseFloat(val);
+            if(originalName.toLowerCase().includes("hız") || originalName.toLowerCase().includes("itme")) v0 = parseFloat(val);
             if(originalName.toLowerCase().includes("yerçekimi") || originalName.toLowerCase().includes("ivme")) gravity = parseFloat(val);
         }
 
@@ -123,8 +151,8 @@
                     body: JSON.stringify({ message, context: currentContext })
                 });
                 const data = await response.json();
-                addMsg('ai-msg', data.reply);
-
+                
+                if(data.reply) addMsg('ai-msg', data.reply);
                 if(data.action === "SHOW_SLIDER") createSlider(data.variable);
                 if(data.action === "SHOW_FORMULA") document.getElementById('formulaBtn').style.display = 'block';
 
@@ -140,6 +168,12 @@
         }
 
         // --- ROKET SİSTEMİ ---
+        function eraseTrajectories() {
+            if(isLaunched) return;
+            trajectories.forEach(t => scene.remove(t));
+            trajectories = [];
+        }
+
         function launchRocket() {
             if(isCooldown) return;
             attempts++;
@@ -149,6 +183,11 @@
             startX = rocket.position.x; startY = rocket.position.y;
             document.querySelector('.launch-btn').disabled = true;
             document.querySelector('.launch-btn').innerText = "UÇUŞTA...";
+
+            currentTrajectoryPoints = [];
+            currentTrajectoryLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color: 0x00a8ff, linewidth: 2}));
+            scene.add(currentTrajectoryLine);
+            trajectories.push(currentTrajectoryLine);
         }
 
         function resetRocket(status) {
@@ -167,12 +206,13 @@
             // --- SOKRATİK SENARYO MANTIĞI ---
             const currentA = document.getElementById('angleSlider').value;
             const currentD = lastDistance.toFixed(1);
-            const hasV0 = unlockedVariables.some(v => v.toLowerCase().includes("hız"));
+            
+            // Temel değişkenleri buldu mu kontrolü
+            const hasV0 = unlockedVariables.some(v => v.toLowerCase().includes("hız") || v.toLowerCase().includes("itme"));
             const hasG = unlockedVariables.some(v => v.toLowerCase().includes("yerçekimi") || v.toLowerCase().includes("ivme"));
             const hasM = unlockedVariables.some(v => v.toLowerCase().includes("kütle") || v.toLowerCase().includes("ağırlık"));
 
-            let secretNote = `[SİSTEM GİZLİ NOTU: Roket ${status}. Değerler: ${currentA} derece, ${currentD} metre.] `;
-            
+            let secretNote = `[SİSTEM GİZLİ NOTU: Roket ${status}. Açık Sürgülerle atış yapıldı, menzil: ${currentD} metre.] `;
             if(hasV0 && hasG && hasM) secretNote += "[TÜM DEĞİŞKENLER BULUNDU] ";
 
             if (status === "BAŞARILI") {
@@ -183,11 +223,11 @@
                 }
             } else {
                 if (consecutiveFailures === 1) {
-                    secretNote += `İlk atışımızı tamamladık ve roketimiz ${currentD} metreye ulaştı. Hedefimizi vurmak için denemeye devam et. Ayrıca menzili etkileyen ilk hız v_0 dışında başka neler olabilir bunu da düşün.`;
+                    secretNote += `İlk atışımızı tamamladık ve roketimiz ${currentD} metreye ulaştı. Hedefi vurmak için denemeye devam et. Ayrıca menzili etkileyen ilk hız v_0 dışında başka neler olabilir bunu da düşün.`;
                 } else if (consecutiveFailures >= 2 && consecutiveFailures < 6) {
-                    secretNote += `Ekranda girdiğin bu değerlerle roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız son değişiklik menzilde işe yaradı mı? Yaradığını düşünüyorsan denemeye devam. Ayrıca uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir düşün.`;
+                    secretNote += `Ekranda girdiğin bu değerlerle roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik menzilde işe yaradı mı? Yaradığını düşünüyorsan denemeye devam. Ayrıca uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir düşün.`;
                 } else if (consecutiveFailures >= 6 && !hasG) {
-                    secretNote += `İPUCU VER: Şu an atışlarımızı Dünya'da yapıyoruz. Sence bu roketi Ay'da veya Mars'ta fırlatsaydık hareketi nasıl değişirdi? (Not: Bu sorudan sonra sayaç sıfırlanacak)`;
+                    secretNote += `[SİSTEM NOTU: Öğrenciye cevabı veya formülü KESİNLİKLE verme. Sadece sezgisel düşünmesini sağlayacak bir ipucu sun. Örneğin: "Şu an atışlarımızı Dünya'da yapıyoruz. Sence bu roketi Ay'da veya Mars'ta fırlatsaydık hareketi nasıl değişirdi?" şeklinde bir soru sor. Bu adımdan sonra sistem deneme sayacını sıfırlayacaktır.]`;
                     consecutiveFailures = 0; 
                 } else if (hasV0 && hasG && hasM) {
                     secretNote += `Ekranda girdiğin bu değerlerle ${currentD} metreye ulaştık. Sürekli tüm değerleri değiştirmek işimizi zorlaştırıyor olabilir. Bilim insanları gibi yapalım: Diğer değişkenleri sabit tutup, sadece birini (örneğin sadece açıyı) değiştirerek test etmeye ne dersin?`;
@@ -195,43 +235,85 @@
             }
 
             addMsg('sys-msg', `💥 <b>${status}</b>`);
-            sendChat(secretNote);
+            sendChat(secretNote); // Gizli notu yolla
+            
+            // Roketi ve efektleri sıfırla
             rocket.position.set(-50, 2, 0);
+            rocket.rotation.z = -((Math.PI/2) - (document.getElementById('angleSlider').value * (Math.PI / 180)));
+            let positions = particleSystem.geometry.attributes.position.array;
+            for(let i=0; i<positions.length; i++) positions[i] = 0;
+            particleSystem.geometry.attributes.position.needsUpdate = true;
         }
 
-        // --- THREE.JS KURULUMU ---
-        let scene, camera, renderer, rocket, targetPad, isLaunched = false, time = 0, theta, startX, startY;
+        // --- THREE.JS KURULUMU (Eksiksiz) ---
+        let scene, camera, renderer, rocket, targetPad, particleSystem;
+        let trajectories = [], currentTrajectoryPoints = [], currentTrajectoryLine;
+
         function init3D() {
             scene = new THREE.Scene(); scene.background = new THREE.Color(0x87CEEB);
             camera = new THREE.PerspectiveCamera(60, (window.innerWidth*0.7)/window.innerHeight, 0.1, 1000);
             camera.position.set(25, 30, 150);
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('sim-canvas'), antialias: true });
             renderer.setSize(window.innerWidth * 0.7, window.innerHeight);
-            const orbit = new THREE.OrbitControls(camera, renderer.domElement);
+            new THREE.OrbitControls(camera, renderer.domElement);
 
             const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshLambertMaterial({color: 0x27ae60}));
             ground.rotation.x = -Math.PI/2; scene.add(ground);
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            let dirLight = new THREE.DirectionalLight(0xffffff, 0.9); dirLight.position.set(50, 100, 50); scene.add(dirLight);
 
-            rocket = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 5), new THREE.MeshLambertMaterial({color: 0xf1c40f}));
-            rocket.position.set(-50, 2, 0); scene.add(rocket);
+            // Detaylı Roket Modeli
+            rocket = new THREE.Group();
+            let body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 8, 16), new THREE.MeshLambertMaterial({color: 0xf1f2f6})); body.position.y = 4;
+            let nose = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4, 16), new THREE.MeshLambertMaterial({color: 0xf39c12})); nose.position.y = 10;
+            rocket.add(body); rocket.add(nose);
+            rocket.position.set(-50, 2, 0); 
+            rocket.rotation.z = -((Math.PI/2) - (45 * (Math.PI / 180)));
+            scene.add(rocket);
 
-            targetPad = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 1), new THREE.MeshLambertMaterial({color: 0xe74c3c}));
-            targetPad.position.set(100, 0.5, 0); scene.add(targetPad);
+            // Hedef Platform
+            targetPad = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 2, 32), new THREE.MeshLambertMaterial({color: 0xe74c3c}));
+            targetPad.position.set(100, 1, 0); scene.add(targetPad);
+
+            // Alev/Parçacık Efekti
+            let pGeo = new THREE.BufferGeometry(); 
+            let pPos = new Float32Array(300 * 3); 
+            pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+            particleSystem = new THREE.Points(pGeo, new THREE.PointsMaterial({color: 0xe67e22, size: 2.5, transparent: true, opacity: 0.8})); 
+            scene.add(particleSystem);
         }
 
         function animate() {
             requestAnimationFrame(animate);
             if(isLaunched) {
-                time += 0.05;
+                time += timeStep;
                 let dx = v0 * Math.cos(theta) * time;
                 let dy = (v0 * Math.sin(theta) * time) - (0.5 * gravity * time * time);
                 rocket.position.x = startX + dx;
                 rocket.position.y = startY + dy;
                 lastDistance = dx;
+
+                // Roketin burnunu uçuş yönüne eğ
+                let vx = v0 * Math.cos(theta), vy = v0 * Math.sin(theta) - (gravity * time);
+                rocket.rotation.z = -( (Math.PI/2) - Math.atan2(vy, vx) );
+
+                // Yörünge Çizimi
+                currentTrajectoryPoints.push(new THREE.Vector3(rocket.position.x, rocket.position.y, rocket.position.z));
+                currentTrajectoryLine.geometry.setFromPoints(currentTrajectoryPoints);
+
+                // Parçacık (Alev) Güncellemesi
+                let positions = particleSystem.geometry.attributes.position.array;
+                for(let i=0; i<100; i++) {
+                    positions[i*3] = rocket.position.x + (Math.random() - 0.5)*2;
+                    positions[i*3+1] = rocket.position.y + (Math.random() - 0.5)*2;
+                    positions[i*3+2] = rocket.position.z + (Math.random() - 0.5)*2;
+                }
+                particleSystem.geometry.attributes.position.needsUpdate = true;
+
                 document.getElementById('hud').innerText = `Menzil: ${dx.toFixed(1)} m | Yükseklik: ${rocket.position.y.toFixed(1)} m`;
-                if(rocket.position.y < 0.5) {
-                    const hit = Math.abs(rocket.position.x - targetPad.position.x) < 10;
+                
+                if(rocket.position.y < 1 && time > 0.5) {
+                    const hit = Math.abs(rocket.position.x - targetPad.position.x) < 12;
                     resetRocket(hit ? "BAŞARILI" : "ÇAKILDI");
                 }
             }
