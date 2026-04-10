@@ -19,7 +19,7 @@
         input[type="text"] { flex: 1; padding: 10px; border: none; border-radius: 4px; outline: none; }
         button.action-btn { background: #e1b12c; border: none; padding: 10px 15px; margin-left: 5px; cursor: pointer; font-weight: bold; border-radius: 4px;}
 
-        #controls { padding: 15px; background: #2f3640; border-top: 2px solid #718093;}
+        #controls { padding: 15px; background: #2f3640; border-top: 2px solid #718093; overflow-y: auto; max-height: 40vh;}
         .slider-group { margin-bottom: 15px;}
         label { display: block; font-size: 13px; margin-bottom: 5px; color: #dcdde1; font-weight: bold;}
         input[type="range"] { width: 100%; cursor: pointer;}
@@ -79,15 +79,20 @@
             </div>
             
             <div class="slider-group hidden-control" id="mass-container">
-                <label style="color:#2f3640;">Roket Kütlesi (YENİ KİLİT AÇILDI): <span id="massVal">10</span> kg</label>
+                <label style="color:#2f3640;">Roket Kütlesi: <span id="massVal">10</span> kg</label>
                 <input type="range" id="massSlider" min="1" max="500" value="10">
+            </div>
+
+            <div class="slider-group hidden-control" id="gravity-container">
+                <label style="color:#2f3640;">Yerçekimi İvmesi: <span id="gravityVal">9.8</span> m/s²</label>
+                <input type="range" id="gravitySlider" min="1.0" max="25.0" step="0.1" value="9.8">
             </div>
 
             <div class="speed-controls">
                 <label style="margin:0;">Simülasyon Hızı:</label>
                 <div class="radio-group">
                     <input type="radio" id="spdNormal" name="simSpeed" value="normal" checked onchange="updateSimSpeed()"><label for="spdNormal">Normal</label>
-                    <input type="radio" id="spdSlow" name="simSpeed" value="slow" onchange="updateSimSpeed()"><label for="spdSlow">Yavaş Çekim</label>
+                    <input type="radio" id="spdSlow" name="simSpeed" value="slow" onchange="updateSimSpeed()"><label for="spdSlow">Yavaş</label>
                 </div>
             </div>
 
@@ -113,6 +118,7 @@
             <ul>
                 <li><b>İlk Hız (v0):</b> <span id="f-v0">50</span> m/s</li>
                 <li><b>Fırlatma Açısı (θ):</b> <span id="f-angle">80</span>°</li>
+                <li><b>Yerçekimi İvmesi (g):</b> <span id="f-g">9.8</span> m/s²</li>
                 <li><b>Yatay Hız Bileşeni (Vx):</b> v0 * cos(θ) = <span id="f-vx">8.7</span> m/s</li>
                 <li><b>Maksimum Menzil (R) Formülü:</b> R = (v0² * sin(2θ)) / g</li>
             </ul>
@@ -128,19 +134,18 @@
     </div>
 
     <script>
-        // Global Güvenlik Değişkenleri
         let attempts = 0;
         let lastDistance = 0;
         let flightStatus = "Bekliyor";
         let timeStep = 0.05;
-        let consecutiveFailures = 0; 
         let isCooldown = false; 
+        let consecutiveFailures = 0;
 
-        // Chat ve AI Fonksiyonları
+        // Dinamik Yerçekimi
+        let gravity = 9.8;
+
         async function sendChat(systemPromptOverride = null) {
             let message = "";
-            
-            // Eğer sistemden gizli bir mesaj geliyorsa ekrana kullanıcı baloncuğu basma
             if(systemPromptOverride) {
                 message = systemPromptOverride;
             } else {
@@ -171,13 +176,15 @@
                 document.getElementById('loading').remove();
                 addMsg('ai-msg', data.reply);
 
-                // Arayüz Tetikleyicileri (JSON Action Command)
                 if(data.action === "SHOW_MASS") {
                     document.getElementById('mass-container').style.display = 'block';
-                    addMsg('sys-msg', '🔓 SİSTEM MESAJI: "Kütle Kontrolü" sürgüsü eklendi!');
+                    addMsg('sys-msg', '🔓 SİSTEM: "Kütle" sürgüsü eklendi!');
+                } else if(data.action === "SHOW_GRAVITY") {
+                    document.getElementById('gravity-container').style.display = 'block';
+                    addMsg('sys-msg', '🔓 SİSTEM: "Yerçekimi İvmesi" sürgüsü eklendi!');
                 } else if(data.action === "SHOW_FORMULA") {
                     document.getElementById('formulaBtn').style.display = 'block';
-                    addMsg('sys-msg', '🔓 SİSTEM MESAJI: "Formüller" butonunun kilidi açıldı!');
+                    addMsg('sys-msg', '🔓 SİSTEM: "Formüller" panelinin kilidi açıldı!');
                 }
 
             } catch (err) {
@@ -203,6 +210,12 @@
         };
         document.getElementById('thrustSlider').oninput = function() { document.getElementById('thrustVal').innerText = this.value; updateFormulas(); };
         document.getElementById('massSlider').oninput = function() { document.getElementById('massVal').innerText = this.value; };
+        
+        document.getElementById('gravitySlider').oninput = function() { 
+            document.getElementById('gravityVal').innerText = this.value; 
+            gravity = parseFloat(this.value); 
+            updateFormulas();
+        };
 
         function updateSimSpeed() { timeStep = document.getElementById('spdSlow').checked ? 0.015 : 0.05; }
         
@@ -211,6 +224,7 @@
             let a = document.getElementById('angleSlider').value;
             document.getElementById('f-v0').innerText = v;
             document.getElementById('f-angle').innerText = a;
+            document.getElementById('f-g').innerText = gravity.toFixed(1);
             document.getElementById('f-vx').innerText = (v * Math.cos(a * Math.PI / 180)).toFixed(1);
         }
 
@@ -228,13 +242,12 @@
             openModal('reportModal');
         }
 
-        // --- THREE.JS 3D SİMÜLASYONU ---
         let scene, camera, renderer, controls;
         let rocket, targetPad, particleSystem;
         let velArrow, accArrow;
         let trajectories = [], currentTrajectoryPoints = [], currentTrajectoryLine;
         let isLaunched = false, time = 0, v0, theta, startX, startY;
-        const gravity = 9.8, TARGET_X = 100;
+        const TARGET_X = 100;
 
         function createTextLabel(text) {
             let canvas = document.createElement('canvas');
@@ -288,7 +301,7 @@
         }
 
         function launchRocket() {
-            if(isLaunched || isCooldown) return; // BİLİŞSEL TEMBELLİK KİLİDİ
+            if(isLaunched || isCooldown) return; 
             
             v0 = parseFloat(document.getElementById('thrustSlider').value);
             theta = parseFloat(document.getElementById('angleSlider').value) * (Math.PI / 180); 
@@ -308,10 +321,10 @@
             
             if(statusMsg.includes("HEDEFE ULAŞTI")) {
                 flightStatus = "Başarılı"; 
-                consecutiveFailures = 0; 
+                consecutiveFailures = 0;
             } else {
                 flightStatus = "Çakıldı"; 
-                consecutiveFailures++; 
+                consecutiveFailures++;
             }
             
             rocket.position.set(startX, startY, 0);
@@ -319,7 +332,6 @@
             velArrow.visible = false; accArrow.visible = false;
             let positions = particleSystem.geometry.attributes.position.array; for(let i=0; i<positions.length; i++) positions[i] = 0; particleSystem.geometry.attributes.position.needsUpdate = true;
 
-            // COOLDOWN UYGULAMASI (3 Saniye Kilit)
             let launchBtn = document.querySelector('.launch-btn');
             launchBtn.style.background = "#7f8c8d";
             launchBtn.innerText = "DÜŞÜNÜLÜYOR... (3s)";
@@ -330,19 +342,20 @@
                 launchBtn.innerText = "YENİDEN ATEŞLE"; launchBtn.style.background = "#e84118";
             }, 3000);
             
-            // --- KADEMELİ SOKRATİK MÜDAHALE (1., 2. ve 3. Hata) ---
-            let promptMsg = `Roketim ${lastDistance.toFixed(1)} metreye düştü ve çakıldı.`;
+            // --- KADEMELİ SOKRATİK MÜDAHALE VE DEĞİŞKEN İZOLASYONU ---
+            let promptMsg = `[SİSTEM GİZLİ NOTU: Roket çakıldı. ${document.getElementById('thrustSlider').value} m/s hız ve ${document.getElementById('angleSlider').value} derece açıyla ${lastDistance.toFixed(1)} metre mesafe gittin. KESİNLİKLE "açıyı değiştir, hızı artır" gibi net tavsiyeler verme.]`;
             
             if (consecutiveFailures === 1) {
-                promptMsg += ` [SİSTEM GİZLİ NOTU: Öğrencinin İLK hatası. Asla hızı veya açıyı değiştirmesini önerme. Üzülme vb. kelimeler kullanma. Sadece "Sence roket neden hedefe varamadan yere düştü? Havada kalma süresini mi yoksa ileri gitme gücünü mü artırmalıyız?" gibi çok temel, ipucusu az bir Sokratik soru sor.]`;
-            } else if (consecutiveFailures === 2) {
-                promptMsg += ` [SİSTEM GİZLİ NOTU: Öğrencinin İKİNCİ hatası. Yine doğrudan cevap verme. "Atışların hedefe ulaşmıyor. Sence roketin yatayda daha çok yol alması için fırlatma eğimini nasıl ayarlamalıyız?" şeklinde bir tık daha belirgin bir soru sor.]`;
-            } else if (consecutiveFailures >= 3) {
-                promptMsg += ` [SİSTEM GİZLİ NOTU: Öğrenci 3. kez başarısız oldu. Hâlâ cevabı verme ama çok net bir BİLİMSEL YÖNTEM direktifi ver: "Sürekli farklı değerler denemek yerine hızı 60 m/s'de sabitleyelim ve sadece açıyı değiştirerek atışlar yapalım. Sence 60 hızda açı kaç olmalı?" de.]`;
-            } else {
-                // Başarılı olursa tetiklenecek kısım
-                promptMsg = `Roketim tam hedefe indi!`;
-            }
+                promptMsg += ` Öğrenciye sadece şu tarz kısa bir şey söyle: "Birlikte konuşalım ya da tekrar düşünüp tekrar dene."`;
+            } 
+            else if (consecutiveFailures === 2) {
+                promptMsg += ` Öğrenciye şu tarz bir soru sor: "Atışlarımız hedefe ulaşmıyor. Acaba roketin havada kalma süresi mi yetersiz, yoksa ileriye doğru itme gücü mü?"`;
+            } 
+            else if (consecutiveFailures >= 3) {
+                promptMsg += ` Öğrenci üst üste 3 kez başarısız oldu. Onu "Bilimsel Yönteme" davet et. Sadece şunu öner: "Sürekli hem hızı hem açıyı değiştirmek işimizi zorlaştırıyor olabilir. Bilim insanları gibi yapalım: Değişkenlerden birini (örneğin hızı) bir değerde sabit tutup, sadece diğerini (açıyı) değiştirerek test etmeye ne dersin?"`;
+            } 
+            
+            if (flightStatus === "Başarılı") promptMsg = "Roketim tam hedefe indi!";
             
             addMsg('sys-msg', `💥 <b>${statusMsg}</b>`);
             sendChat(promptMsg); 
