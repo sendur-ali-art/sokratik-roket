@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Sokratik Sandbox - Gelişmiş Fizik Laboratuvarı</title>
+    <title>Sokratik Sandbox - Akıllı Fizik Laboratuvarı</title>
     <style>
         body { margin: 0; display: flex; height: 100vh; font-family: 'Segoe UI', sans-serif; background-color: #1e272e; color: white; overflow: hidden;}
         
@@ -59,7 +59,7 @@
         
         <div id="chat-history">
             <div class="msg ai-msg">
-                Laboratuvara hoş geldin! Amacımız roketimizi 150m ilerideki platforma indirmek. Hız ve Açı değerlerini değiştirerek roketi fırlatabilirsin. Başarılar!
+                Laboratuvara hoş geldin! Amacımız roketimizi 150m ilerideki platforma indirmek. Ekranda fırlatma açısını ayarlayabilirsin. Başka neleri değiştirmeliyiz? Sohbet alanından fikirlerini sunarak laboratuvar araçlarını açabilirsin. Başarılar!
             </div>
         </div>
         
@@ -73,11 +73,12 @@
                 <label>Fırlatma Açısı: <span id="angleVal">80</span>°</label>
                 <input type="range" id="angleSlider" min="10" max="90" value="80">
             </div>
-            <div class="slider-group">
-                <label>İlk Hız (v0): <span id="thrustVal">50</span> m/s</label>
+            
+            <div class="slider-group hidden-control" id="thrust-container">
+                <label style="color:#2f3640;">İlk Hız (v0): <span id="thrustVal">50</span> m/s</label>
                 <input type="range" id="thrustSlider" min="10" max="80" value="50">
             </div>
-            
+
             <div class="slider-group hidden-control" id="mass-container">
                 <label style="color:#2f3640;">Roket Kütlesi: <span id="massVal">10</span> kg</label>
                 <input type="range" id="massSlider" min="1" max="500" value="10">
@@ -122,7 +123,6 @@
                 <li><b>Yatay Hız Bileşeni (Vx):</b> v0 * cos(θ) = <span id="f-vx">8.7</span> m/s</li>
                 <li><b>Maksimum Menzil (R) Formülü:</b> R = (v0² * sin(2θ)) / g</li>
             </ul>
-            <p style="color:#f1c40f;"><b>Not:</b> Uçuş sırasında <span style="color:#2ecc71;">YEŞİL ok hızı</span>, <span style="color:#f39c12;">SARI ok ivmeyi (yerçekimi)</span> gösterir.</p>
         </div>
 
         <div id="reportModal" class="modal">
@@ -141,7 +141,11 @@
         let isCooldown = false; 
         let consecutiveFailures = 0;
 
-        // Dinamik Yerçekimi
+        // Kilit Değişkenleri
+        let isSpeedUnlocked = false;
+        let isGravityUnlocked = false;
+        let isMassUnlocked = false;
+
         let gravity = 9.8;
 
         async function sendChat(systemPromptOverride = null) {
@@ -176,11 +180,17 @@
                 document.getElementById('loading').remove();
                 addMsg('ai-msg', data.reply);
 
-                if(data.action === "SHOW_MASS") {
+                if(data.action === "SHOW_SPEED") {
+                    document.getElementById('thrust-container').style.display = 'block';
+                    isSpeedUnlocked = true;
+                    addMsg('sys-msg', '🔓 SİSTEM: "İlk Hız" sürgüsü eklendi!');
+                } else if(data.action === "SHOW_MASS") {
                     document.getElementById('mass-container').style.display = 'block';
+                    isMassUnlocked = true;
                     addMsg('sys-msg', '🔓 SİSTEM: "Kütle" sürgüsü eklendi!');
                 } else if(data.action === "SHOW_GRAVITY") {
                     document.getElementById('gravity-container').style.display = 'block';
+                    isGravityUnlocked = true;
                     addMsg('sys-msg', '🔓 SİSTEM: "Yerçekimi İvmesi" sürgüsü eklendi!');
                 } else if(data.action === "SHOW_FORMULA") {
                     document.getElementById('formulaBtn').style.display = 'block';
@@ -342,17 +352,36 @@
                 launchBtn.innerText = "YENİDEN ATEŞLE"; launchBtn.style.background = "#e84118";
             }, 3000);
             
-            // --- KADEMELİ SOKRATİK MÜDAHALE VE DEĞİŞKEN İZOLASYONU ---
-            let promptMsg = `[SİSTEM GİZLİ NOTU: Roket çakıldı. ${document.getElementById('thrustSlider').value} m/s hız ve ${document.getElementById('angleSlider').value} derece açıyla ${lastDistance.toFixed(1)} metre mesafe gittin. KESİNLİKLE "açıyı değiştir, hızı artır" gibi net tavsiyeler verme.]`;
+            // DİNAMİK VE SADELEŞTİRİLMİŞ MÜDAHALE
+            let currentA = document.getElementById('angleSlider').value;
+            let currentV = document.getElementById('thrustSlider').value;
+            let currentD = lastDistance.toFixed(1);
+            
+            // Eğer hız (thrust) henüz kilidi açılmamışsa, mesajda hızdan bahsetmeyelim.
+            let varsText = `${currentA} derece açıyla`;
+            if (isSpeedUnlocked) {
+                varsText = `${currentV} m/s hız ve ` + varsText;
+            }
+            
+            let promptMsg = `[SİSTEM GİZLİ NOTU: Roket çakıldı. KESİNLİKLE yönlendirici tavsiye verme.]`;
             
             if (consecutiveFailures === 1) {
-                promptMsg += ` Öğrenciye sadece şu tarz kısa bir şey söyle: "Birlikte konuşalım ya da tekrar düşünüp tekrar dene."`;
+                promptMsg += ` Öğrenciye SADECE şu cümleyi kur (Başka bir şey ekleme): "${varsText} ${currentD} metre mesafeye gitti. Birlikte konuşalım ya da tekrar düşünüp tekrar dene."`;
             } 
             else if (consecutiveFailures === 2) {
-                promptMsg += ` Öğrenciye şu tarz bir soru sor: "Atışlarımız hedefe ulaşmıyor. Acaba roketin havada kalma süresi mi yetersiz, yoksa ileriye doğru itme gücü mü?"`;
+                promptMsg += ` Öğrenciye SADECE şu cümleyi kur (Başka bir şey ekleme): "Atışlarımız hedefe ulaşmıyor. ${varsText} ${currentD} metre mesafeye gitti. Birlikte konuşalım ya da tekrar düşünüp tekrar dene."`;
             } 
             else if (consecutiveFailures >= 3) {
-                promptMsg += ` Öğrenci üst üste 3 kez başarısız oldu. Onu "Bilimsel Yönteme" davet et. Sadece şunu öner: "Sürekli hem hızı hem açıyı değiştirmek işimizi zorlaştırıyor olabilir. Bilim insanları gibi yapalım: Değişkenlerden birini (örneğin hızı) bir değerde sabit tutup, sadece diğerini (açıyı) değiştirerek test etmeye ne dersin?"`;
+                // Hız veya yerçekimi keşfedilmediyse onları buldur
+                let unlockedCount = 1; // Açı her zaman açık
+                if(isSpeedUnlocked) unlockedCount++;
+                if(isGravityUnlocked) unlockedCount++;
+                
+                if (unlockedCount < 3) {
+                    promptMsg += ` Öğrenci henüz tüm değişkenleri keşfetmedi. Ona SADECE şu soruyu sor: "Sürekli aynı şeyleri değiştiriyoruz, sence roketin uçuşunu etkileyebilecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir?"`;
+                } else {
+                    promptMsg += ` Öğrenci değişkenleri keşfetti. Onu "Bilimsel Yönteme" davet et: "Sürekli tüm değerleri değiştirmek işimizi zorlaştırıyor olabilir. Bilim insanları gibi yapalım: Değişkenlerden birini sabit tutup, sadece diğerini değiştirerek test etmeye ne dersin?"`;
+                }
             } 
             
             if (flightStatus === "Başarılı") promptMsg = "Roketim tam hedefe indi!";
