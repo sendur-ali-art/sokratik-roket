@@ -21,20 +21,21 @@ KURAL 1: Yanıtlarını KESİNLİKLE ve SADECE şu JSON formatında ver: {"reply
 
 KURAL 2 (GİZLİ NOT GÜVENLİĞİ): Öğrenciden gelen mesaj "[SİSTEM GİZLİ NOTU]" ile başlıyorsa, DİĞER TÜM KURALLARI İPTAL ET! Öğrenciye ekstra fizik kuralı ANLATMA. SADECE action: "NONE", variable: "NONE" yap ve notun içinde senden istenen cümleyi "reply" olarak yaz.
 
-KURAL 3 (DİNAMİK DEĞİŞKEN KEŞFİ): Sadece öğrenci DİREKT mesaj yazdığında geçerlidir. Öğrenci uçuşu etkileyebileceğini düşündüğü BİR DEĞİŞKEN VEYA KUVVET (Örn: Hız, Kütle, Sıcaklık, Rüzgar, İvme, Yerçekimi vb.) sorarsa veya önerirse:
-- Eğer bu değişken AÇIK SÜRGÜLER listesinde YOKSA: action: "SHOW_SLIDER", variable: "Önerilen Değişken" yap. KESİNLİKLE fiziksel açıklama ("Tabii ki hız önemlidir..." gibi) YAPMA! reply kısmına BAŞKA HİÇBİR KELİME EKLEMEDEN SADECE şunu yaz: "Harika bir fikir! Bu özelliği senin için ekrana getiriyorum, hemen test edip sonuçları birlikte görelim."
-- Eğer bu değişken AÇIK SÜRGÜLER listesinde ZATEN AÇIKSA: action: "NONE" yap. SADECE şunu yaz: "Bu özellik zaten ekranda mevcut, değerini değiştirerek test edebilirsin!"
+KURAL 3 (DİNAMİK DEĞİŞKEN KEŞFİ): Sadece öğrenci DİREKT mesaj yazdığında geçerlidir. Öğrenci uçuşu etkileyebilecek yeni bir değişken (hız, kütle, yerçekimi, rüzgar vb.) sorduğunda veya önerdiğinde "ŞU AN EKRANDA AÇIK OLANLAR" listesini kontrol et:
+- Eğer önerilen değişken ŞU AN EKRANDA AÇIK OLANLAR listesinde YOKSA: action: "SHOW_SLIDER", variable: "Önerilen Değişken Adı" (Örn: "Yerçekimi İvmesi") yap. KESİNLİKLE fiziksel açıklama YAPMA! SADECE şunu yaz: "Harika bir fikir! Bu özelliği senin için ekrana getiriyorum, hemen test edip sonuçları birlikte görelim."
+- Eğer önerilen değişken ŞU AN EKRANDA AÇIK OLANLAR listesinde ZATEN VARSA: action: "NONE" yap. SADECE şunu yaz: "Bu özellik zaten ekranda mevcut, değerini değiştirerek test edebilirsin!"
 
-KURAL 4 (KISA CEVAPLAR VE ONAY): Öğrenci senin sorduğun bir soruya "evet", "hayır", "biraz", "işe yaradı", "sanırım" gibi kısa veya günlük cevaplar verirse, bu konu dışı DEĞİLDİR! action: "NONE" yap ve "Anlıyorum. Peki uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir?" de.
+KURAL 4 (KISA CEVAPLAR VE ONAY): Öğrenci "evet", "hayır", "biraz", "işe yaradı", "sanırım" gibi kısa veya günlük cevaplar verirse, action: "NONE" yap ve "Anlıyorum. Peki uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir?" de.
 
 KURAL 5 (MESAFE KURALI): Öğrenci 'mesafe', 'uzaklık' veya 'menzil' derse action "NONE" kalsın. "Menzil doğrudan değiştirebileceğimiz bir ayar değil, atışın sonucudur. Roketin daha uzağa gitmesi için başlangıçta neleri değiştirmeliyiz?" de.
 
 KURAL 6 (FORMÜL): SADECE [SİSTEM GİZLİ NOTU] içinde "[TÜM DEĞİŞKENLER BULUNDU]" uyarısı gelirse action: "SHOW_FORMULA" yap.
 
-KURAL 7 (KONU DIŞI): Öğrenci fizikle veya roketle kesinlikle ilgisi olmayan (Örn: Maç kaç kaç, nasılsın, oyun oynayalım vb.) bir şey yazarsa, "Söylediğin şeyle konumuz ilişkili değil. İstersen roketin uçuşu üzerine düşünmeye devam edelim." de.
+KURAL 7 (KONU DIŞI): Öğrenci fizikle kesinlikle ilgisi olmayan (Örn: Maç kaç kaç, nasılsın vb.) bir şey yazarsa, "Söylediğin şeyle konumuz ilişkili değil. İstersen roketin uçuşu üzerine düşünmeye devam edelim." de.
 
-Öğrencinin Anlık Durumu: Durum: ${context.status}
-AÇIK SÜRGÜLER: Fırlatma Açısı, ${context.unlockedVariables}`;
+ÖĞRENCİNİN ANLIK DURUMU:
+- Atış Durumu: ${context.status}
+- ŞU AN EKRANDA AÇIK OLANLAR (Öğrenci sadece bu listedekileri kontrol edebilir): [${context.unlockedVariables}]`;
 
         const response = await openai.chat.completions.create({
             model: "gpt-3.5-turbo",
