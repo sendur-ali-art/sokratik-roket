@@ -39,7 +39,7 @@
     <div id="ui-panel">
         <div id="header">🚀 Sokratik Fizik Laboratuvarı</div>
         <div id="chat-history">
-            <div class="msg ai-msg">Hoş geldin! Hedefimiz 150m ilerideki platform. Şu an sadece fırlatma açısını kontrol edebiliyoruz. Sence uçuşu etkileyecek başka neler olabilir?</div>
+            <div class="msg ai-msg">Hoş geldin! Hedefimiz 150m ilerideki platform. Şu an sadece fırlatma açısını kontrol edebiliyoruz. Denemeye başla ve uçuşu etkileyecek değişkenleri bul</div>
         </div>
         <div id="chat-input-area">
             <input type="text" id="userInput" placeholder="Fikirlerini buraya yaz..." onkeypress="if(event.key === 'Enter') sendChat()">
@@ -74,11 +74,12 @@
         <canvas id="sim-canvas"></canvas>
         <div id="formulaModal" class="modal">
             <h2 style="color:#e1b12c;">Matematiksel Model (Eğik Atış)</h2>
-            <p>Tebrikler! Tüm değişkenleri keşfettin. İşte roketimizin izlediği yolun matematiği:</p>
+            <p>Tebrikler! Uçuşu etkileyen ana değişkenleri keşfettin. İşte roketimizin izlediği yolun matematiği:</p>
             <ul style="line-height:2;">
                 <li><b>Yatay Menzil:</b> R = (v₀² * sin(2θ)) / g</li>
                 <li><b>Uçuş Süresi:</b> t = (2 * v₀ * sinθ) / g</li>
             </ul>
+            <p style="color:#f39c12; font-size: 13px;"><i>Dikkat ettin mi? Formülde kütle (m) yok! Sürtünmesiz ortamda roketin ne kadar ağır olduğu menzili değiştirmez.</i></p>
             <button onclick="closeModal()" style="padding:10px; background:#e74c3c; border:none; color:white; border-radius:5px; cursor:pointer;">Kapat</button>
         </div>
     </div>
@@ -207,30 +208,29 @@
 
             const currentD = lastDistance.toFixed(1);
             
+            // DİKKAT: Kütle (hasM) formülü açma zorunluluğundan çıkarıldı!
             const hasV0 = unlockedVariables.some(v => v.toLowerCase().includes("hız") || v.toLowerCase().includes("itme"));
             const hasG = unlockedVariables.some(v => v.toLowerCase().includes("yerçekimi") || v.toLowerCase().includes("ivme"));
-            const hasM = unlockedVariables.some(v => v.toLowerCase().includes("kütle") || v.toLowerCase().includes("ağırlık"));
 
-            // Sadece YAPMASI GEREKEN EYLEMİ İLETİYORUZ (Hız, Açı gibi tetikleyici kelimeleri çıkardık)
             let secretNote = `[SİSTEM GİZLİ NOTU - ÖĞRENCİ MESAJI DEĞİLDİR!] Roket ${status}. `;
-            if(hasV0 && hasG && hasM) secretNote += "[TÜM DEĞİŞKENLER BULUNDU] ";
+            if(hasV0 && hasG) secretNote += "[TÜM DEĞİŞKENLER BULUNDU] "; // Artık sadece Hız ve İvme yeterli
 
             if (status === "BAŞARILI") {
-                if (!(hasV0 && hasG && hasM)) {
+                if (!(hasV0 && hasG)) {
                     secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Tebrikler, hedefi tam isabetle vurdun! Peki sence roketimizin uçuş mesafesini etkileyebilecek, henüz konuşmadığımız başka hangi fiziksel kuvvetler olabilir? Tahminlerini bekliyorum."`;
                 } else {
-                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Tebrikler! Tüm değişkenleri keşfettik ve hedefi vurduk."`;
+                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Tebrikler! Ana değişkenleri keşfettik ve hedefi vurduk. Matematiksel modeli inceleyebilirsin."`;
                 }
             } else {
-                if (consecutiveFailures === 1) {
+                if (attempts === 1) { 
                     secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "İlk atışımızı tamamladık ve roketimiz ${currentD} metreye ulaştı. Hedefi vurmak için denemeye devam et. Ayrıca menzili etkileyen fırlatma açısı dışında başka neler olabilir bunu da düşün."`;
-                } else if (consecutiveFailures >= 2 && consecutiveFailures < 6) {
-                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Şu anki ayarlarla roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik menzilde işe yaradı mı? Yaradığını düşünüyorsan denemeye devam. Ayrıca uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir düşün."`;
                 } else if (consecutiveFailures >= 6 && !hasG) {
                     secretNote += `Aşağıdaki talimatı uygula: Öğrenciye cevabı veya formülü KESİNLİKLE verme. Sadece sezgisel düşünmesini sağlayacak bir ipucu sun. Örneğin: "Şu an atışlarımızı Dünya'da yapıyoruz. Sence bu roketi Ay'da veya Mars'ta fırlatsaydık hareketi nasıl değişirdi?" şeklinde bir soru sor.`;
                     consecutiveFailures = 0; 
-                } else if (hasV0 && hasG && hasM) {
+                } else if (hasV0 && hasG) {
                     secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Şu anki değerlerle ${currentD} metreye ulaştık. Sürekli tüm değerleri aynı anda değiştirmek işimizi zorlaştırıyor olabilir. Bilim insanları gibi yapalım: Diğer değişkenleri sabit tutup, sadece birini değiştirerek test etmeye ne dersin?"`;
+                } else {
+                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Şu anki ayarlarla roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik menzilde işe yaradı mı? Yaradığını düşünüyorsan denemeye devam. Ayrıca uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir düşün."`;
                 }
             }
 
