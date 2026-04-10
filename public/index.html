@@ -223,7 +223,7 @@
                 }
             } else {
                 if (consecutiveFailures === 1) {
-                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "İlk atışımızı tamamladık ve roketimiz ${currentD} metreye ulaştı. Hedefi vurmak için denemeye devam et. Ayrıca menzili etkileyen ilk hız dışında başka neler olabilir bunu da düşün."`;
+                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "İlk atışımızı tamamladık ve roketimiz ${currentD} metreye ulaştı. Hedefi vurmak için denemeye devam et. Ayrıca menzili etkileyen fırlatma açısı dışında başka neler olabilir bunu da düşün."`;
                 } else if (consecutiveFailures >= 2 && consecutiveFailures < 6) {
                     secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Şu anki ayarlarla roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik menzilde işe yaradı mı? Yaradığını düşünüyorsan denemeye devam. Ayrıca uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir düşün."`;
                 } else if (consecutiveFailures >= 6 && !hasG) {
