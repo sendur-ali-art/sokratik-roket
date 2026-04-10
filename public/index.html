@@ -122,7 +122,6 @@
                 <li><b>Yatay Hız Bileşeni (Vx):</b> v0 * cos(θ) = <span id="f-vx">8.7</span> m/s</li>
                 <li><b>Maksimum Menzil (R) Formülü:</b> R = (v0² * sin(2θ)) / g</li>
             </ul>
-            <p style="color:#f1c40f;"><b>Not:</b> Uçuş sırasında <span style="color:#2ecc71;">YEŞİL ok hızı</span>, <span style="color:#f39c12;">SARI ok ivmeyi (yerçekimi)</span> gösterir.</p>
         </div>
 
         <div id="reportModal" class="modal">
@@ -330,8 +329,11 @@
             isLaunched = false;
             isCooldown = true; 
             
-            if(statusMsg.includes("HEDEFE ULAŞTI")) flightStatus = "Başarılı"; 
-            else flightStatus = "Çakıldı"; 
+            if(statusMsg.includes("HEDEFE ULAŞTI")) {
+                flightStatus = "Başarılı"; 
+            } else {
+                flightStatus = "Çakıldı"; 
+            }
             
             rocket.position.set(startX, startY, 0);
             rocket.rotation.z = -((Math.PI/2) - (document.getElementById('angleSlider').value * (Math.PI / 180)));
@@ -368,15 +370,19 @@
 
             if (flightStatus === "Çakıldı") {
                 if (unlockedCount < 3) {
-                     promptMsg += `Öğrenciye formül ve doğrudan cevap vermeden SADECE şu tarz bir soru sor: "Ekranda girdiğin bu değerlerle roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik işe yaradı mı, menzilde bir ilerleme var mı? Yoksa uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir?"`;
+                     if (attempts === 1) {
+                         promptMsg += `Öğrenciye formül ve tavsiye vermeden SADECE şunu söyle: "İlk atışımızı yaptık ve roket ${currentD} metre mesafeye gitti. Menzili değiştirmek için roketin uçuşunu etkileyebilecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir?"`;
+                     } else {
+                         promptMsg += `Öğrenciye formül ve tavsiye vermeden SADECE şunu söyle: "Ekranda girdiğin bu değerlerle roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik menzilde bir işe yaradı mı? Yoksa uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir?"`;
+                     }
                 } else {
                      promptMsg += `Öğrenci tüm değişkenleri buldu. Onu 'Değişkenleri İzole Etme' taktiğine davet et: "Ekranda girdiğin bu değerlerle ${currentD} metre mesafeye gittik. Sürekli tüm değerleri değiştirmek işimizi zorlaştırıyor. Bilim insanları gibi yapalım: Diğer değişkenleri sabit tutup, sadece birini (örneğin açıyı) değiştirerek test etmeye ne dersin?"`;
                 }
-            } else { // Başarılıysa
+            } else { 
                 if (unlockedCount < 3) {
-                    promptMsg += `Öğrenciyi tebrik et. ANCAK öğrenci henüz tüm fiziksel değişkenleri keşfetmedi. Ona şunu sor: "Tebrikler, hedefi tam isabetle vurdun! Peki roketimizin uçuş mesafesini ve süresini etkileyebilecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir? Tahminlerini bekliyorum."`;
+                    promptMsg += `Öğrenciyi tebrik et. ANCAK öğrenci henüz tüm değişkenleri keşfetmedi. Şunu sor: "Tebrikler, hedefi tam isabetle vurdun! Peki roketimizin uçuş mesafesini etkileyebilecek, ekranda olmayan BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir? Tahminlerini bekliyorum."`;
                 } else {
-                    promptMsg += `Öğrenciyi ve tüm değişkenleri bulmasını kutla.`;
+                    promptMsg += `Öğrenciyi ve tüm değişkenleri bulmasını kutla. Artık formül hakkında konuşabilirsin.`;
                 }
             }
             
