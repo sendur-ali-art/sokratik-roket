@@ -36,7 +36,6 @@
         .btn-formula { background: #27ae60; }
         .btn-report { background: #8e44ad; }
 
-        /* GİZLİ KONTROLLER İÇİN */
         .hidden-control { display: none; background: #f39c12; padding: 10px; border-radius: 5px; margin-bottom: 15px; animation: highlight 2s;}
         @keyframes highlight { 0% { background-color: #e74c3c; transform: scale(1.05); } 100% { background-color: #f39c12; transform: scale(1); } }
 
@@ -123,6 +122,7 @@
                 <li><b>Yatay Hız Bileşeni (Vx):</b> v0 * cos(θ) = <span id="f-vx">8.7</span> m/s</li>
                 <li><b>Maksimum Menzil (R) Formülü:</b> R = (v0² * sin(2θ)) / g</li>
             </ul>
+            <p style="color:#f1c40f;"><b>Not:</b> Uçuş sırasında <span style="color:#2ecc71;">YEŞİL ok hızı</span>, <span style="color:#f39c12;">SARI ok ivmeyi (yerçekimi)</span> gösterir.</p>
         </div>
 
         <div id="reportModal" class="modal">
@@ -139,12 +139,12 @@
         let flightStatus = "Bekliyor";
         let timeStep = 0.05;
         let isCooldown = false; 
-        let consecutiveFailures = 0;
 
         // Kilit Değişkenleri
         let isSpeedUnlocked = false;
         let isGravityUnlocked = false;
         let isMassUnlocked = false;
+        let isFormulaUnlocked = false;
 
         let gravity = 9.8;
 
@@ -194,6 +194,7 @@
                     addMsg('sys-msg', '🔓 SİSTEM: "Yerçekimi İvmesi" sürgüsü eklendi!');
                 } else if(data.action === "SHOW_FORMULA") {
                     document.getElementById('formulaBtn').style.display = 'block';
+                    isFormulaUnlocked = true;
                     addMsg('sys-msg', '🔓 SİSTEM: "Formüller" panelinin kilidi açıldı!');
                 }
 
@@ -329,13 +330,8 @@
             isLaunched = false;
             isCooldown = true; 
             
-            if(statusMsg.includes("HEDEFE ULAŞTI")) {
-                flightStatus = "Başarılı"; 
-                consecutiveFailures = 0;
-            } else {
-                flightStatus = "Çakıldı"; 
-                consecutiveFailures++;
-            }
+            if(statusMsg.includes("HEDEFE ULAŞTI")) flightStatus = "Başarılı"; 
+            else flightStatus = "Çakıldı"; 
             
             rocket.position.set(startX, startY, 0);
             rocket.rotation.z = -((Math.PI/2) - (document.getElementById('angleSlider').value * (Math.PI / 180)));
@@ -352,39 +348,37 @@
                 launchBtn.innerText = "YENİDEN ATEŞLE"; launchBtn.style.background = "#e84118";
             }, 3000);
             
-            // DİNAMİK VE SADELEŞTİRİLMİŞ MÜDAHALE
+            // --- GİZLİ MÜDAHALE (SENARYOLU) ---
             let currentA = document.getElementById('angleSlider').value;
             let currentV = document.getElementById('thrustSlider').value;
+            let currentM = document.getElementById('massSlider').value;
             let currentD = lastDistance.toFixed(1);
-            
-            // Eğer hız (thrust) henüz kilidi açılmamışsa, mesajda hızdan bahsetmeyelim.
-            let varsText = `${currentA} derece açıyla`;
-            if (isSpeedUnlocked) {
-                varsText = `${currentV} m/s hız ve ` + varsText;
+
+            let unlockedCount = 0;
+            if(isSpeedUnlocked) unlockedCount++;
+            if(isGravityUnlocked) unlockedCount++;
+            if(isMassUnlocked) unlockedCount++;
+
+            let promptMsg = `[SİSTEM GİZLİ NOTU: Roket ${flightStatus === "Başarılı" ? "Hedefe Ulaştı" : "Çakıldı"}.] Öğrenci şu değerlerle atış yaptı: ${currentA} derece açı, ${currentV} m/s hız, ${gravity} m/s² yerçekimi ve ${currentM} kg kütle. Roket bu değerlerle ${currentD} metre mesafeye gitti. `;
+
+            if (unlockedCount === 3 && !isFormulaUnlocked) {
+                promptMsg += ` [TÜM DEĞİŞKENLER BULUNDU] `;
+                isFormulaUnlocked = true;
             }
-            
-            let promptMsg = `[SİSTEM GİZLİ NOTU: Roket çakıldı. KESİNLİKLE yönlendirici tavsiye verme.]`;
-            
-            if (consecutiveFailures === 1) {
-                promptMsg += ` Öğrenciye SADECE şu cümleyi kur (Başka bir şey ekleme): "${varsText} ${currentD} metre mesafeye gitti. Birlikte konuşalım ya da tekrar düşünüp tekrar dene."`;
-            } 
-            else if (consecutiveFailures === 2) {
-                promptMsg += ` Öğrenciye SADECE şu cümleyi kur (Başka bir şey ekleme): "Atışlarımız hedefe ulaşmıyor. ${varsText} ${currentD} metre mesafeye gitti. Birlikte konuşalım ya da tekrar düşünüp tekrar dene."`;
-            } 
-            else if (consecutiveFailures >= 3) {
-                // Hız veya yerçekimi keşfedilmediyse onları buldur
-                let unlockedCount = 1; // Açı her zaman açık
-                if(isSpeedUnlocked) unlockedCount++;
-                if(isGravityUnlocked) unlockedCount++;
-                
+
+            if (flightStatus === "Çakıldı") {
                 if (unlockedCount < 3) {
-                    promptMsg += ` Öğrenci henüz tüm değişkenleri keşfetmedi. Ona SADECE şu soruyu sor: "Sürekli aynı şeyleri değiştiriyoruz, sence roketin uçuşunu etkileyebilecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir?"`;
+                     promptMsg += `Öğrenciye formül ve doğrudan cevap vermeden SADECE şu tarz bir soru sor: "Ekranda girdiğin bu değerlerle roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik işe yaradı mı, menzilde bir ilerleme var mı? Yoksa uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir?"`;
                 } else {
-                    promptMsg += ` Öğrenci değişkenleri keşfetti. Onu "Bilimsel Yönteme" davet et: "Sürekli tüm değerleri değiştirmek işimizi zorlaştırıyor olabilir. Bilim insanları gibi yapalım: Değişkenlerden birini sabit tutup, sadece diğerini değiştirerek test etmeye ne dersin?"`;
+                     promptMsg += `Öğrenci tüm değişkenleri buldu. Onu 'Değişkenleri İzole Etme' taktiğine davet et: "Ekranda girdiğin bu değerlerle ${currentD} metre mesafeye gittik. Sürekli tüm değerleri değiştirmek işimizi zorlaştırıyor. Bilim insanları gibi yapalım: Diğer değişkenleri sabit tutup, sadece birini (örneğin açıyı) değiştirerek test etmeye ne dersin?"`;
                 }
-            } 
-            
-            if (flightStatus === "Başarılı") promptMsg = "Roketim tam hedefe indi!";
+            } else { // Başarılıysa
+                if (unlockedCount < 3) {
+                    promptMsg += `Öğrenciyi tebrik et. ANCAK öğrenci henüz tüm fiziksel değişkenleri keşfetmedi. Ona şunu sor: "Tebrikler, hedefi tam isabetle vurdun! Peki roketimizin uçuş mesafesini ve süresini etkileyebilecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir? Tahminlerini bekliyorum."`;
+                } else {
+                    promptMsg += `Öğrenciyi ve tüm değişkenleri bulmasını kutla.`;
+                }
+            }
             
             addMsg('sys-msg', `💥 <b>${statusMsg}</b>`);
             sendChat(promptMsg); 
