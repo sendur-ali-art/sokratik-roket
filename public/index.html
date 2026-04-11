@@ -93,6 +93,7 @@
             document.getElementById('angleVal').innerText = val;
             if(!isLaunched) {
                 rocketGroup.rotation.z = -((Math.PI/2) - (val * (Math.PI / 180)));
+                renderer.render(scene, camera); // Açı değiştiğinde ekranı hemen güncelle
             }
         }
 
@@ -175,6 +176,7 @@
             if(isLaunched) return;
             trajectories.forEach(t => scene.remove(t));
             trajectories = [];
+            renderer.render(scene, camera); // Silince ekranı hemen güncelle
         }
 
         function launchRocket() {
@@ -208,12 +210,11 @@
 
             const currentD = lastDistance.toFixed(1);
             
-            // DİKKAT: Kütle (hasM) formülü açma zorunluluğundan çıkarıldı!
             const hasV0 = unlockedVariables.some(v => v.toLowerCase().includes("hız") || v.toLowerCase().includes("itme"));
             const hasG = unlockedVariables.some(v => v.toLowerCase().includes("yerçekimi") || v.toLowerCase().includes("ivme"));
 
             let secretNote = `[SİSTEM GİZLİ NOTU - ÖĞRENCİ MESAJI DEĞİLDİR!] Roket ${status}. `;
-            if(hasV0 && hasG) secretNote += "[TÜM DEĞİŞKENLER BULUNDU] "; // Artık sadece Hız ve İvme yeterli
+            if(hasV0 && hasG) secretNote += "[TÜM DEĞİŞKENLER BULUNDU] "; 
 
             if (status === "BAŞARILI") {
                 if (!(hasV0 && hasG)) {
@@ -242,6 +243,7 @@
             let positions = particleSystem.geometry.attributes.position.array;
             for(let i=0; i<positions.length; i++) positions[i] = 0;
             particleSystem.geometry.attributes.position.needsUpdate = true;
+            renderer.render(scene, camera); // Roket sıfırlandığında ekranı hemen güncelle
         }
 
         // --- THREE.JS KURULUMU ---
@@ -254,10 +256,15 @@
             camera.position.set(25, 30, 150);
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('sim-canvas'), antialias: true });
             renderer.setSize(window.innerWidth * 0.7, window.innerHeight);
-            new THREE.OrbitControls(camera, renderer.domElement);
+            
+            // Kontrollerin hedefini roketin başladığı yere ve hedefe doğru ayarlıyoruz
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(25, 0, 0); 
+            controls.update();
 
             const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshLambertMaterial({color: 0x27ae60}));
             ground.rotation.x = -Math.PI/2; scene.add(ground);
+            
             scene.add(new THREE.AmbientLight(0xffffff, 0.8));
             let dirLight = new THREE.DirectionalLight(0xffffff, 0.9); dirLight.position.set(50, 100, 50); scene.add(dirLight);
 
@@ -280,6 +287,9 @@
             pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
             particleSystem = new THREE.Points(pGeo, new THREE.PointsMaterial({color: 0xe67e22, size: 2.5, transparent: true, opacity: 0.8})); 
             scene.add(particleSystem);
+
+            // Sahnede her şey kurulduktan sonra ilk kareyi zorla çizdiriyoruz
+            renderer.render(scene, camera); 
         }
 
         function animate() {
@@ -315,18 +325,21 @@
                     const hit = Math.abs(rocketGroup.position.x - targetPad.position.x) < 12;
                     resetRocket(hit ? "BAŞARILI" : "ÇAKILDI");
                 }
+                renderer.render(scene, camera); // Sadece animasyon akarken ekranı güncelle
             }
-            renderer.render(scene, camera);
         }
 
         function openModal() { document.getElementById('formulaModal').style.display = 'block'; }
         function closeModal() { document.getElementById('formulaModal').style.display = 'none'; }
         
-        init3D(); animate();
+        init3D(); 
+        animate();
+        
         window.addEventListener('resize', () => {
             camera.aspect = (window.innerWidth*0.7)/window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth*0.7, window.innerHeight);
+            if(!isLaunched) renderer.render(scene, camera); // Pencere boyutu değiştiğinde zorla güncelle
         });
     </script>
 </body>
