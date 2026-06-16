@@ -31,7 +31,6 @@
         .modal { display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%; background: rgba(47, 54, 64, 0.95); border: 2px solid #e1b12c; border-radius: 10px; padding: 20px; z-index: 100; box-sizing: border-box; overflow-y: auto;}
         #hud { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; color: #00a8ff; font-family: monospace; font-size: 14px; pointer-events: none;}
         
-        /* Rapor Kartları için Özel Stiller */
         .dashboard-card { background: #353b48; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #0097e6; }
         .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
     </style>
@@ -92,7 +91,7 @@
         <div id="reportModal" class="modal">
             <h1 style="color:#9b59b6; text-align:center;">🚀 Bilim İnsanı Sertifikası</h1>
             <div id="reportContent" style="font-size:14px; color: white; line-height: 1.6;">
-                </div>
+            </div>
             <div style="display:flex; gap:10px; margin-top:20px;">
                 <button onclick="closeReport()" style="flex:1; padding:10px; background:#e74c3c; border:none; color:white; border-radius:5px; cursor:pointer;">Laboratuvara Dön</button>
                 <button onclick="openModal(); closeReport();" style="flex:1; padding:10px; background:#27ae60; border:none; color:white; border-radius:5px; cursor:pointer;">📊 Formülleri İncele</button>
@@ -101,16 +100,17 @@
     </div>
 
     <script>
-        // --- TEMEL DURUM DEĞİŞKENLERİ ---
         let attempts = 0, consecutiveFailures = 0, lastDistance = 0, flightStatus = "Bekliyor";
         let isCooldown = false, unlockedVariables = ["Fırlatma Açısı"];
         let gravity = 9.8, v0 = 50, timeStep = 0.05;
         let isLaunched = false, time = 0, theta = 0, startX = 0, startY = 0;
 
-        // --- VERİ TAKİP (LOGGER) DEĞİŞKENLERİ ---
         let launchHistory = [];
         let timeData = { lastHintTime: null, reactionTimes: [] };
         let massTested = false;
+        
+        // --- SOHBET HAFIZASI ---
+        let chatMemory = [];
 
         function updateAngleUI(val) {
             document.getElementById('angleVal').innerText = val;
@@ -124,16 +124,14 @@
             timeStep = document.getElementById('spdSlow').checked ? 0.015 : 0.05;
         }
 
-        // --- DİNAMİK SÜRGÜ YÖNETİMİ ---
         function createSlider(name) {
             if (unlockedVariables.includes(name)) return;
             unlockedVariables.push(name);
             
-            // Eğer bir ipucu sonrasında yeni sürgü açılıyorsa reaksiyon süresini kaydet
             if (timeData.lastHintTime) {
                 let reaction = (Date.now() - timeData.lastHintTime) / 1000;
                 timeData.reactionTimes.push(reaction);
-                timeData.lastHintTime = null; // Süreyi sıfırla
+                timeData.lastHintTime = null; 
             }
 
             const container = document.getElementById('dynamic-sliders');
@@ -159,17 +157,19 @@
             document.getElementById(id + 'Val').innerText = val;
             if(originalName.toLowerCase().includes("hız") || originalName.toLowerCase().includes("itme")) v0 = parseFloat(val);
             if(originalName.toLowerCase().includes("yerçekimi") || originalName.toLowerCase().includes("ivme")) gravity = parseFloat(val);
-            // Öğrencinin kütleyi test edip etmediğini yakala
             if(originalName.toLowerCase().includes("kütle") || originalName.toLowerCase().includes("ağırlık")) massTested = true;
         }
 
-        // --- YAPAY ZEKA İLETİŞİMİ ---
         async function sendChat(systemPromptOverride = null) {
             const input = document.getElementById('userInput');
             const message = systemPromptOverride || input.value.trim();
             if(!message && !systemPromptOverride) return;
+            
             if(!systemPromptOverride) {
                 addMsg('user-msg', message);
+                chatMemory.push({role: "user", content: message});
+                // Hafızayı son 6 mesajla sınırlı tut
+                if(chatMemory.length > 6) chatMemory.shift();
                 input.value = '';
             }
 
@@ -183,17 +183,21 @@
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message, context: currentContext })
+                    // Geçmişi de backend'e gönderiyoruz
+                    body: JSON.stringify({ message, context: currentContext, history: chatMemory })
                 });
                 const data = await response.json();
                 
-                if(data.reply) addMsg('ai-msg', data.reply);
-                
-                if(data.action === "SHOW_SLIDER") {
-                    createSlider(data.variable);
+                if(data.reply) {
+                    addMsg('ai-msg', data.reply);
+                    if(!systemPromptOverride) {
+                        chatMemory.push({role: "assistant", content: data.reply});
+                        if(chatMemory.length > 6) chatMemory.shift();
+                    }
                 }
+                
+                if(data.action === "SHOW_SLIDER") createSlider(data.variable);
                 if(data.action === "SHOW_FORMULA") {
-                    // Eskiden sadece formülü açan komutu artık Rapor oluşturma için kullanıyoruz.
                     document.getElementById('reportBtn').style.display = 'block';
                     document.getElementById('formulaBtn').style.display = 'block';
                     generateReport(); 
@@ -210,7 +214,6 @@
             div.scrollIntoView();
         }
 
-        // --- ROKET VE SİMÜLASYON SİSTEMİ ---
         function eraseTrajectories() {
             if(isLaunched) return;
             trajectories.forEach(t => scene.remove(t));
@@ -229,13 +232,7 @@
             document.querySelector('.launch-btn').disabled = true;
             document.querySelector('.launch-btn').innerText = "UÇUŞTA...";
 
-            // Atış verisini günlüğe kaydet
-            launchHistory.push({
-                attempt: attempts,
-                angle: parseFloat(currentAngle),
-                v0: v0,
-                gravity: gravity
-            });
+            launchHistory.push({ attempt: attempts, angle: parseFloat(currentAngle), v0: v0, gravity: gravity });
 
             currentTrajectoryPoints = [];
             currentTrajectoryLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({color: 0x00a8ff, linewidth: 2}));
@@ -259,28 +256,29 @@
             const hasV0 = unlockedVariables.some(v => v.toLowerCase().includes("hız") || v.toLowerCase().includes("itme"));
             const hasG = unlockedVariables.some(v => v.toLowerCase().includes("yerçekimi") || v.toLowerCase().includes("ivme"));
             
-            let secretNote = `[SİSTEM GİZLİ NOTU - ÖĞRENCİ MESAJI DEĞİLDİR!] Roket ${status}. `;
+            let secretNote = `[SİSTEM GİZLİ NOTU] Roket ${status}. `;
             if(hasV0 && hasG) secretNote += "[TÜM DEĞİŞKENLER BULUNDU] "; 
 
+            // YENİ FORMAT: AI komutları ayırt edebilsin diye MESAJ: "" kurgusu eklendi
             if (status === "BAŞARILI") {
                 if (!(hasV0 && hasG)) {
-                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Tebrikler, hedefi tam isabetle vurdun! Peki sence roketimizin uçuş mesafesini etkileyebilecek, henüz konuşmadığımız başka hangi fiziksel kuvvetler olabilir? Tahminlerini bekliyorum."`;
-                    timeData.lastHintTime = Date.now(); // İpucu verildi, kronometre başladı
+                    secretNote += `MESAJ: "Tebrikler, hedefi tam isabetle vurdun! Peki sence roketimizin uçuş mesafesini etkileyebilecek, henüz konuşmadığımız başka hangi fiziksel kuvvetler olabilir?"`;
+                    timeData.lastHintTime = Date.now(); 
                 } else {
-                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Tebrikler! Ana değişkenleri keşfettik ve hedefi vurduk. Matematiksel modeli ve başarının raporunu inceleyebilirsin."`;
+                    secretNote += `MESAJ: "Tebrikler! Ana değişkenleri keşfettik ve hedefi vurduk. Matematiksel modeli ve başarının raporunu inceleyebilirsin."`;
                 }
             } else {
                 if (attempts === 1) { 
-                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "İlk atışımızı tamamladık ve roketimiz ${currentD} metreye ulaştı. Hedefi vurmak için denemeye devam et. Ayrıca menzili etkileyen fırlatma açısı dışında başka neler olabilir bunu da düşün."`;
+                    secretNote += `MESAJ: "İlk atışımızı tamamladık ve roketimiz ${currentD} metreye ulaştı. Hedefi vurmak için denemeye devam et. Ayrıca menzili etkileyen fırlatma açısı dışında başka neler olabilir bunu da düşün."`;
                     timeData.lastHintTime = Date.now();
                 } else if (consecutiveFailures >= 6 && !hasG) {
-                    secretNote += `Aşağıdaki talimatı uygula: Öğrenciye cevabı veya formülü KESİNLİKLE verme. Sadece sezgisel düşünmesini sağlayacak bir ipucu sun. Örneğin: "Şu an atışlarımızı Dünya'da yapıyoruz. Sence bu roketi Ay'da veya Mars'ta fırlatsaydık hareketi nasıl değişirdi?" şeklinde bir soru sor.`;
+                    secretNote += `MESAJ: "Şu an atışlarımızı Dünya'da yapıyoruz. Sence bu roketi Ay'da veya Mars'ta fırlatsaydık hareketi nasıl değişirdi?"`;
                     consecutiveFailures = 0; 
                     timeData.lastHintTime = Date.now();
                 } else if (hasV0 && hasG) {
-                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Şu anki değerlerle ${currentD} metreye ulaştık. Sürekli tüm değerleri aynı anda değiştirmek işimizi zorlaştırıyor olabilir. Bilim insanları gibi yapalım: Diğer değişkenleri sabit tutup, sadece birini değiştirerek test etmeye ne dersin?"`;
+                    secretNote += `MESAJ: "Şu anki değerlerle ${currentD} metreye ulaştık. Bilim insanları gibi yapalım: Diğer değişkenleri sabit tutup, sadece birini değiştirerek test etmeye ne dersin?"`;
                 } else {
-                    secretNote += `Aşağıdaki cümleyi öğrenciye ilet: "Şu anki ayarlarla roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik menzilde işe yaradı mı? Yaradığını düşünüyorsan denemeye devam. Ayrıca uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir düşün."`;
+                    secretNote += `MESAJ: "Şu anki ayarlarla roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik menzilde işe yaradı mı? Uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir düşün."`;
                     timeData.lastHintTime = Date.now();
                 }
             }
@@ -296,27 +294,22 @@
             renderer.render(scene, camera);
         }
 
-        // --- RAPOR OLUŞTURMA MANTIĞI ---
         function generateReport() {
             let totalShots = launchHistory.length;
             
-            // Kütle testi analizi
             let massStr = massTested ? 
                 "Kütleyi değiştirerek test ettin ve sürtünmesiz ortamda menzile etki etmediğini bizzat kanıtladın! 🎯 Harika bir bilimsel duruş." : 
                 "Bu arada, ağır bir roketin daha kısa veya daha uzun mesafe gidebileceğini düşünmedin. Ağırlığın/kütlenin bu denklemde bir rolü yok!";
             
-            // Reaksiyon (İçgörü) süresi analizi
             let avgTimeStr = "Henüz ölçülemedi";
             if (timeData.reactionTimes.length > 0) {
                 let avg = timeData.reactionTimes.reduce((a, b) => a + b, 0) / timeData.reactionTimes.length;
                 avgTimeStr = avg.toFixed(1) + " Saniye";
             }
 
-            // Açı analizi
             let angles = launchHistory.map(h => h.angle);
             let minAngle = Math.min(...angles), maxAngle = Math.max(...angles);
             
-            // Son başarılı atışın verileri
             let finalShot = launchHistory[launchHistory.length - 1] || {angle: 45, v0: 50, gravity: 9.8};
 
             document.getElementById('reportContent').innerHTML = `
@@ -350,7 +343,6 @@
         function openReport() { document.getElementById('reportModal').style.display = 'block'; }
         function closeReport() { document.getElementById('reportModal').style.display = 'none'; }
 
-        // --- THREE.JS KURULUMU ---
         let scene, camera, renderer, rocketGroup, targetPad, particleSystem;
         let trajectories = [], currentTrajectoryPoints = [], currentTrajectoryLine;
 
