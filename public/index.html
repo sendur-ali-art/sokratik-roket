@@ -31,6 +31,7 @@
         .modal { display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%; background: rgba(47, 54, 64, 0.95); border: 2px solid #e1b12c; border-radius: 10px; padding: 20px; z-index: 100; box-sizing: border-box; overflow-y: auto;}
         #hud { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; color: #00a8ff; font-family: monospace; font-size: 14px; pointer-events: none;}
         
+        /* Yenilenmiş Dashboard Rapor Stilleri */
         .dashboard-card { background: #353b48; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #0097e6; }
         .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
     </style>
@@ -109,7 +110,6 @@
         let timeData = { lastHintTime: null, reactionTimes: [] };
         let massTested = false;
         
-        // --- SOHBET HAFIZASI ---
         let chatMemory = [];
 
         function updateAngleUI(val) {
@@ -160,18 +160,15 @@
             if(originalName.toLowerCase().includes("kütle") || originalName.toLowerCase().includes("ağırlık")) massTested = true;
         }
 
-        async function sendChat(systemPromptOverride = null) {
+        async function sendChat() {
             const input = document.getElementById('userInput');
-            const message = systemPromptOverride || input.value.trim();
-            if(!message && !systemPromptOverride) return;
+            const message = input.value.trim();
+            if(!message) return;
             
-            if(!systemPromptOverride) {
-                addMsg('user-msg', message);
-                chatMemory.push({role: "user", content: message});
-                // Hafızayı son 6 mesajla sınırlı tut
-                if(chatMemory.length > 6) chatMemory.shift();
-                input.value = '';
-            }
+            addMsg('user-msg', message);
+            chatMemory.push({role: "user", content: message});
+            if(chatMemory.length > 6) chatMemory.shift();
+            input.value = '';
 
             const currentContext = {
                 angle: document.getElementById('angleSlider').value,
@@ -179,29 +176,22 @@
                 status: flightStatus,
                 unlockedVariables: unlockedVariables.join(", ")
             };
+            
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    // Geçmişi de backend'e gönderiyoruz
                     body: JSON.stringify({ message, context: currentContext, history: chatMemory })
                 });
                 const data = await response.json();
                 
                 if(data.reply) {
                     addMsg('ai-msg', data.reply);
-                    if(!systemPromptOverride) {
-                        chatMemory.push({role: "assistant", content: data.reply});
-                        if(chatMemory.length > 6) chatMemory.shift();
-                    }
+                    chatMemory.push({role: "assistant", content: data.reply});
+                    if(chatMemory.length > 6) chatMemory.shift();
                 }
                 
                 if(data.action === "SHOW_SLIDER") createSlider(data.variable);
-                if(data.action === "SHOW_FORMULA") {
-                    document.getElementById('reportBtn').style.display = 'block';
-                    document.getElementById('formulaBtn').style.display = 'block';
-                    generateReport(); 
-                }
 
             } catch (err) { console.error(err); }
         }
@@ -251,40 +241,51 @@
                 document.querySelector('.launch-btn').disabled = false;
                 document.querySelector('.launch-btn').innerText = "ATEŞLE";
             }, 3000);
-            const currentD = lastDistance.toFixed(1);
             
+            const currentD = lastDistance.toFixed(1);
             const hasV0 = unlockedVariables.some(v => v.toLowerCase().includes("hız") || v.toLowerCase().includes("itme"));
             const hasG = unlockedVariables.some(v => v.toLowerCase().includes("yerçekimi") || v.toLowerCase().includes("ivme"));
             
-            let secretNote = `[SİSTEM GİZLİ NOTU] Roket ${status}. `;
-            if(hasV0 && hasG) secretNote += "[TÜM DEĞİŞKENLER BULUNDU] "; 
+            // SİSTEM MESAJLARI: Yapay zekaya sormadan direkt arayüzden basıyoruz! (Halüsinasyonları bitirir)
+            let aiMessage = "";
+            let triggerReport = false;
 
-            // YENİ FORMAT: AI komutları ayırt edebilsin diye MESAJ: "" kurgusu eklendi
             if (status === "BAŞARILI") {
                 if (!(hasV0 && hasG)) {
-                    secretNote += `MESAJ: "Tebrikler, hedefi tam isabetle vurdun! Peki sence roketimizin uçuş mesafesini etkileyebilecek, henüz konuşmadığımız başka hangi fiziksel kuvvetler olabilir?"`;
+                    aiMessage = "Tebrikler, hedefi tam isabetle vurdun! Peki sence roketimizin uçuş mesafesini etkileyebilecek, henüz konuşmadığımız başka hangi fiziksel kuvvetler olabilir?";
                     timeData.lastHintTime = Date.now(); 
                 } else {
-                    secretNote += `MESAJ: "Tebrikler! Ana değişkenleri keşfettik ve hedefi vurduk. Matematiksel modeli ve başarının raporunu inceleyebilirsin."`;
+                    aiMessage = "Tebrikler! Ana değişkenleri keşfettik ve hedefi vurduk. Matematiksel modeli ve başarının raporunu inceleyebilirsin.";
+                    triggerReport = true;
                 }
             } else {
                 if (attempts === 1) { 
-                    secretNote += `MESAJ: "İlk atışımızı tamamladık ve roketimiz ${currentD} metreye ulaştı. Hedefi vurmak için denemeye devam et. Ayrıca menzili etkileyen fırlatma açısı dışında başka neler olabilir bunu da düşün."`;
+                    aiMessage = `İlk atışımızı tamamladık ve roketimiz ${currentD} metreye ulaştı. Hedefi vurmak için denemeye devam et. Ayrıca menzili etkileyen fırlatma açısı dışında başka neler olabilir bunu da düşün.`;
                     timeData.lastHintTime = Date.now();
                 } else if (consecutiveFailures >= 6 && !hasG) {
-                    secretNote += `MESAJ: "Şu an atışlarımızı Dünya'da yapıyoruz. Sence bu roketi Ay'da veya Mars'ta fırlatsaydık hareketi nasıl değişirdi?"`;
+                    aiMessage = "Şu an atışlarımızı Dünya'da yapıyoruz. Sence bu roketi Ay'da veya Mars'ta fırlatsaydık hareketi nasıl değişirdi?";
                     consecutiveFailures = 0; 
                     timeData.lastHintTime = Date.now();
                 } else if (hasV0 && hasG) {
-                    secretNote += `MESAJ: "Şu anki değerlerle ${currentD} metreye ulaştık. Bilim insanları gibi yapalım: Diğer değişkenleri sabit tutup, sadece birini değiştirerek test etmeye ne dersin?"`;
+                    aiMessage = `Şu anki değerlerle ${currentD} metreye ulaştık. Bilim insanları gibi yapalım: Diğer değişkenleri sabit tutup, sadece birini değiştirerek test etmeye ne dersin?`;
                 } else {
-                    secretNote += `MESAJ: "Şu anki ayarlarla roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik menzilde işe yaradı mı? Uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir düşün."`;
+                    aiMessage = `Şu anki ayarlarla roket ${currentD} metre mesafeye gitti. Sence bu yaptığımız değişiklik menzilde işe yaradı mı? Uçuşu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir düşün.`;
                     timeData.lastHintTime = Date.now();
                 }
             }
 
             addMsg('sys-msg', `💥 <b>${status}</b>`);
-            sendChat(secretNote); 
+            addMsg('ai-msg', aiMessage);
+            
+            // Öğrenci sonradan cevap verdiğinde AI bağlamı bilsin diye hafızaya ekliyoruz
+            chatMemory.push({role: "assistant", content: aiMessage});
+            if(chatMemory.length > 6) chatMemory.shift();
+            
+            if (triggerReport) {
+                document.getElementById('reportBtn').style.display = 'block';
+                document.getElementById('formulaBtn').style.display = 'block';
+                generateReport();
+            }
             
             rocketGroup.position.set(-50, 2, 0);
             rocketGroup.rotation.z = -((Math.PI/2) - (document.getElementById('angleSlider').value * (Math.PI / 180)));
@@ -294,44 +295,75 @@
             renderer.render(scene, camera);
         }
 
+        // DETAYLI PARAMETRE BAZLI RAPOR OLUŞTURMA MANTIĞI
         function generateReport() {
             let totalShots = launchHistory.length;
             
-            let massStr = massTested ? 
-                "Kütleyi değiştirerek test ettin ve sürtünmesiz ortamda menzile etki etmediğini bizzat kanıtladın! 🎯 Harika bir bilimsel duruş." : 
-                "Bu arada, ağır bir roketin daha kısa veya daha uzun mesafe gidebileceğini düşünmedin. Ağırlığın/kütlenin bu denklemde bir rolü yok!";
-            
-            let avgTimeStr = "Henüz ölçülemedi";
-            if (timeData.reactionTimes.length > 0) {
-                let avg = timeData.reactionTimes.reduce((a, b) => a + b, 0) / timeData.reactionTimes.length;
-                avgTimeStr = avg.toFixed(1) + " Saniye";
-            }
-
+            // --- Açı Analizi ---
             let angles = launchHistory.map(h => h.angle);
             let minAngle = Math.min(...angles), maxAngle = Math.max(...angles);
+            let angleStr = `Ağırlıklı olarak <b>${minAngle}° ile ${maxAngle}°</b> bandında denemeler yaptın. Sonunda optimum eğimi buldun.`;
+
+            // --- Hız Analizi ---
+            let highSpeedCount = launchHistory.filter(h => h.v0 > 60).length;
+            let speedPercent = totalShots > 0 ? Math.round((highSpeedCount / totalShots) * 100) : 0;
+            let speedStr = speedPercent > 50 ? 
+                `Atışlarının <b>%${speedPercent}'i</b> yüksek hızlı (>60 m/s) fırlatmalardı. Güçlü motorlar kullanmayı seviyorsun!` : 
+                `Atışlarının <b>%${100 - speedPercent}'i</b> düşük, kontrollü hızlardaydı. Temkinli ve isabet odaklı bir profil çizdin.`;
+
+            // --- Yerçekimi Analizi ---
+            let alienGravityCount = launchHistory.filter(h => h.gravity !== 9.8).length;
+            let gravityStr = alienGravityCount > 0 ? 
+                `Atışlarının <b>${alienGravityCount} tanesinde</b> yerçekimini değiştirerek Dünya dışı koşulları (farklı gezegenleri) simüle ettin.` : 
+                `Tüm atışlarını Dünya standartlarında (9.8 m/s²) gerçekleştirdin. Gezegenler arası keşfe çıkmadın.`;
+
+            // --- Kütle Analizi ---
+            let massStr = massTested ? 
+                "Kütleyi de test ettin! Ancak sonucun değişmediğini görerek, sürtünmesiz ortamda kütlenin menzile etki etmediğini bizzat kanıtladın. Harika bir bilimsel duruş. 🎯" : 
+                "Roketin ağır veya hafif olmasının menzili etkileyeceğini düşünmedin, doğrudan hareket denklemlerine odaklandın. (Zaten kütlenin bu denklemde rolü yok!)";
             
+            // --- Reaksiyon Süresi ---
+            let avgTimeStr = "Ölçülemedi";
+            if (timeData.reactionTimes.length > 0) {
+                let avg = timeData.reactionTimes.reduce((a, b) => a + b, 0) / timeData.reactionTimes.length;
+                avgTimeStr = "<b>" + avg.toFixed(1) + " Saniye</b>";
+            }
+
             let finalShot = launchHistory[launchHistory.length - 1] || {angle: 45, v0: 50, gravity: 9.8};
 
             document.getElementById('reportContent').innerHTML = `
                 <div class="dashboard-grid">
-                    <div class="dashboard-card">
-                        <h3 style="margin-top:0; color:#e1b12c;">📊 Laboratuvar Özeti</h3>
-                        <p><b>Toplam Atış:</b> Hedefi tüm parametrelerle vurana kadar ${totalShots} roket fırlattın.</p>
-                        <p><b>Açı Optimizasyonu:</b> Ağırlıklı olarak ${minAngle}° ile ${maxAngle}° bandında denemeler yaptın.</p>
-                        <p><b>Sokratik Çıkarım Hızı:</b> İpuçlarını okuyup yeni değişkenleri keşfetme ortalaman: <b>${avgTimeStr}</b>.</p>
+                    <div class="dashboard-card" style="grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <h3 style="margin-top:0; color:#e1b12c;">📊 Genel Performans</h3>
+                            <p style="margin-bottom:0;">Toplam fırlatılan roket: <b>${totalShots}</b></p>
+                            <p style="margin-top:5px;">Sokratik Çıkarım (İpucu kavrama) Ortalaman: ${avgTimeStr}</p>
+                        </div>
+                        <div style="text-align:right; border-left:2px solid #718093; padding-left:15px;">
+                            <h3 style="margin-top:0; color:#27ae60;">🏆 Kusursuz Atış</h3>
+                            <p style="margin:0; font-size:16px;">Açı: <b>${finalShot.angle}°</b> | Hız: <b>${finalShot.v0}</b> m/s | İvme: <b>${finalShot.gravity}</b> m/s²</p>
+                        </div>
                     </div>
-                    <div class="dashboard-card" style="border-left-color: #27ae60;">
-                        <h3 style="margin-top:0; color:#27ae60;">🏆 Mükemmel Atış</h3>
-                        <p>Hedefi vurduğun nihai, kusursuz konfigürasyon:</p>
-                        <p><b>Açı:</b> ${finalShot.angle}°</p>
-                        <p><b>İlk Hız:</b> ${finalShot.v0} m/s</p>
-                        <p><b>Yerçekimi İvmesi:</b> ${finalShot.gravity} m/s²</p>
+                    
+                    <div class="dashboard-card" style="border-left-color: #f39c12;">
+                        <h3 style="margin-top:0; color:#f39c12;">📐 Açı Optimizasyonu</h3>
+                        <p>${angleStr}</p>
                     </div>
-                </div>
-                <div class="dashboard-card" style="border-left-color: #f39c12;">
-                    <h3 style="margin-top:0; color:#f39c12;">💡 Kavramsal Kazanımlar</h3>
-                    <p>Fırlatma Açısı, İlk Hız ve Yerçekimi İvmesi arasındaki fiziksel ilişkiyi deneme yanılma ile başarıyla analiz ettin.</p>
-                    <p>${massStr}</p>
+
+                    <div class="dashboard-card" style="border-left-color: #e84118;">
+                        <h3 style="margin-top:0; color:#e84118;">🚀 Hız Profili</h3>
+                        <p>${speedStr}</p>
+                    </div>
+
+                    <div class="dashboard-card" style="border-left-color: #00a8ff;">
+                        <h3 style="margin-top:0; color:#00a8ff;">🌍 Gezegenler Arası Simülasyon</h3>
+                        <p>${gravityStr}</p>
+                    </div>
+
+                    <div class="dashboard-card" style="border-left-color: #9b59b6;">
+                        <h3 style="margin-top:0; color:#9b59b6;">⚖️ Kütle Yanılgısı Testi</h3>
+                        <p>${massStr}</p>
+                    </div>
                 </div>
             `;
             
