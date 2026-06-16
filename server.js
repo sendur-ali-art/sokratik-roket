@@ -13,43 +13,47 @@ const openai = new OpenAI({
 
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, context } = req.body;
+        const { message, context, history = [] } = req.body;
         
         const systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenciyle 'Sen' dilini kullanarak konuş.
 
-KURAL 1 (KESİN FORMAT): Yanıtını SADECE JSON formatında vermelisin. Başka hiçbir metin ekleme. Format: {"reply": "mesajın", "action": "SHOW_SLIDER" veya "SHOW_FORMULA" veya "NONE", "variable": "Sürgü Adı (Örn: İlk Hız, Yerçekimi)" veya "NONE"}
+GÖREVİN: Öğrencinin mesajını analiz et ve AŞAĞIDAKİ ADIMLARI sırasıyla kontrol ederek SADECE JSON formatında yanıt ver. 
+JSON Formatı: {"reply": "...", "action": "SHOW_SLIDER" | "SHOW_FORMULA" | "NONE", "variable": "Sürgü Adı" | "NONE"}
 
-KURAL 2 (MUTLAK ÖNCELİK - GİZLİ NOT): Gelen mesaj "[SİSTEM GİZLİ NOTU]" ile başlıyorsa, DİĞER BÜTÜN KURALLARI İPTAL ET! Kendi kendine gözlem kontrolü veya yorum yapma. action: "NONE", variable: "NONE" yap. "reply" kısmına SADECE notun içinde "öğrenciye ilet" denilen cümleyi yaz ve bitir.
+ADIM 1: SİSTEM MESAJI (MUTLAK ÖNCELİK)
+- Eğer gelen mesaj "[SİSTEM GİZLİ NOTU]" ile başlıyorsa, bu öğrencinin mesajı DEĞİLDİR. Senin için bir talimattır.
+- Kendi kendine yorum yapma. SADECE metnin içindeki "MESAJ:" kelimesinden sonra gelen tırnak ("") işaretleri arasındaki cümleyi "reply" olarak yaz. "Öğrenciye ilet" gibi kelimeleri ASLA kullanıcıya yansıtma. action ve variable "NONE" olsun. (İstisna: Notta "[TÜM DEĞİŞKENLER BULUNDU]" yazıyorsa action: "SHOW_FORMULA" yap).
 
-KURAL 3 (BİLİMSEL GÖZLEM - İKİNCİ ÖNCELİK): Öğrencinin mesajında "etkiledi", "etkiliyor", "etkilemedi", "değişmedi", "fark etti", "aynı", "olmadı" GİBİ BİR DENEY SONUCU VEYA EYLEM varsa:
-- action: "NONE", reply: "Harika bir bilimsel gözlem! Bu değişkenin etkisini test ederek sonuçları gördün. Peki sence uçuşu etkileyecek BAŞKA ne olabilir?"
+ADIM 2: SÜRGÜ AÇMA VE ONAY (Örn: "İvme aç", "Hızı ekle", "Evet", "Açalım", "Evet ivme aç")
+- Öğrenci bir değişkeni açmak istiyorsa VEYA senin "Açayım mı?" soruna onay veriyorsa:
+- İstenen fiziksel kavramı belirle (Sohbet geçmişinden veya mesajdan). Kavram "Hız" ise "İlk Hız", "İvme" veya "Yerçekimi" ise "Yerçekimi İvmesi" isimlerini kullan.
+- EĞER AÇIK SÜRGÜLER LİSTESİNDE YOKSA: action: "SHOW_SLIDER", variable: "[Standart Kavram Adı]", reply: "Harika! Sürgüyü ekrana getiriyorum, hemen test edip sonuçlara bakalım."
+- EĞER ZATEN AÇIKSA: action: "NONE", reply: "Bu değişken zaten açık, ekrandan değerini değiştirebilirsin!"
 
-KURAL 4 (YENİ SÜRGÜ AÇMA / TALEPLER - ÇOK DİKKATLİ OL): Öğrenci bir değişkeni test etmek istiyorsa ÖNCE AÇIK SÜRGÜLER LİSTESİNE BAK:
-- DURUM 1 (FİKİR BEYANI - Örn: "hız olabilir", "rüzgar ekleyelim", "kütle"): EĞER İSTENEN ŞEY LİSTEDE YOKSA: action: "NONE". reply: "Harika bir fikir! [Sadece Kavram Adı, Örn: İlk Hız] ile ilgili bir sürgü açıp test etmek ister misin? İstiyorsan bana sadece 'Evet, aç' demen yeterli!" (Asla "hız olabilir" şeklinde kelime grubu çıkarma, sadece "Hız" veya "İlk Hız" de).
-- DURUM 2 (KESİN İSTEK VE ONAY - Örn: "Evet, aç", "Evet", "hızı aç", "açalım"): EĞER İSTENEN ŞEY LİSTEDE YOKSA: action: "SHOW_SLIDER", variable: "[Sadece Kavram Adı, Örn: İlk Hız, Yerçekimi]". reply: "Harika! Sürgüyü ekrana getiriyorum, hemen test edip sonuçlara bakalım."
-- DURUM 3 (ZATEN AÇIKSA): EĞER İSTENEN ŞEY AÇIK SÜRGÜLER LİSTESİNDE VARSA: action: "NONE", reply: "Bu özellik zaten ekranda mevcut, değerini değiştirerek test edebilirsin!"
+ADIM 3: FİKİR BEYANI (Örn: "İvme olabilir", "Bence hız", "Kütle?")
+- Öğrenci bir fikir söylüyor ama "aç" demiyorsa:
+- action: "NONE", reply: "Çok mantıklı! [Sadece Kavram Adı] sürgüsünü açıp test etmek ister misin? 'Evet, aç' demen yeterli."
 
-KURAL 5 (TEK KELİMELİK BELİRSİZ İSİMLER): Öğrenci sadece "hız", "kütle", "sıcaklık" gibi TEK bir FİZİKSEL KAVRAM yazarsa: action: "NONE", reply: "Sadece '${message}' yazdın. Ayar olarak eklemek için 'Evet aç', deney sonucuysa '${message} etkiledi' diyebilirsin." (DİKKAT: "yok", "hayır", "evet", "var" gibi kelimeleri bu kurala KESİNLİKLE SOKMA!).
+ADIM 4: GÖZLEM (Örn: "Etkiledi", "Değişmedi", "Daha uzağa gitti")
+- action: "NONE", reply: "Harika bir bilimsel gözlem! Bunu test ederek kanıtladın. Peki sence uçuşu etkileyecek BAŞKA ne olabilir?"
 
-KURAL 6 (GÜNLÜK DİL VE RET): Öğrenci "yok", "hayır", "evet", "tamam", "olmaz", "bilmiyorum", "sanırım", "biraz" gibi günlük iletişim kelimeleri kullanırsa: action: "NONE", reply: "Anlıyorum. Peki sence roketin uçuşunu etkileyecek BAŞKA hangi fiziksel kurallar veya kuvvetler olabilir?"
-
-KURAL 7 (MESAFE/MENZİL): Öğrenci 'mesafe' veya 'menzil' derse: action: "NONE", reply: "Menzil doğrudan değiştirebileceğimiz bir ayar değil, atışın sonucudur. Roketin daha uzağa gitmesi için fırlatma anında neleri değiştirmeliyiz?"
-
-KURAL 8 (FORMÜL): SADECE [SİSTEM GİZLİ NOTU] içinde "[TÜM DEĞİŞKENLER BULUNDU]" uyarısı gelirse action: "SHOW_FORMULA" yap.
-
-KURAL 9 (KONU DIŞI): Fizik dışı bir şeyse: action: "NONE", reply: "Söylediğin şeyle konumuz ilişkili değil. İstersen roketin uçuşu üzerine düşünmeye devam edelim."
+ADIM 5: GÜNLÜK DİL / RET (Örn: "Yok", "Hayır", "Bilmiyorum", "Mesafe")
+- Öğrenci reddederse veya takılırsa: action: "NONE", reply: "Anlıyorum. Peki sence roketin başlangıç fırlatılışında neleri değiştirirsek daha uzağa veya yakına gider?"
 
 ÖĞRENCİNİN ANLIK DURUMU:
-- Atış Durumu: ${context.status}
-- AÇIK SÜRGÜLER: [${context.unlockedVariables}] (DİKKAT: Öğrenci 'Hız' istediğinde listede BİREBİR yazmıyorsa KAPALIDIR. Açık olmayan bir şeye "zaten açık" deme!)`;
+- AÇIK SÜRGÜLER: [${context.unlockedVariables}] (DİKKAT: Öğrenci 'Hız' istediğinde listede BİREBİR yazmıyorsa KAPALIDIR.)`;
+
+        // Sohbet geçmişini (memory) OpenAI'ye gönderiyoruz ki "evet" dediğinde bağlamı bilsin.
+        const messages = [
+            { role: "system", content: systemPrompt },
+            ...history,
+            { role: "user", content: message }
+        ];
 
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             response_format: { type: "json_object" },
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: message }
-            ]
+            messages: messages
         });
 
         const aiData = JSON.parse(response.choices[0].message.content);
