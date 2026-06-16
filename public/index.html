@@ -31,7 +31,6 @@
         .modal { display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%; background: rgba(47, 54, 64, 0.95); border: 2px solid #e1b12c; border-radius: 10px; padding: 20px; z-index: 100; box-sizing: border-box; overflow-y: auto;}
         #hud { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; color: #00a8ff; font-family: monospace; font-size: 14px; pointer-events: none;}
         
-        /* Yenilenmiş Dashboard Rapor Stilleri */
         .dashboard-card { background: #353b48; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #0097e6; }
         .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
     </style>
@@ -137,12 +136,15 @@
             const container = document.getElementById('dynamic-sliders');
             const group = document.createElement('div');
             group.className = 'slider-group';
-            const cleanName = name.replace(/\s+/g, '-').toLowerCase();
+            
+            // TÜRKÇE KARAKTER SORUNU İÇİN KESİN ÇÖZÜM
+            const safeNameStr = name.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
+            const cleanName = safeNameStr.replace(/\s+/g, '-');
             
             let min=1, max=100, val=50, unit="";
-            if(name.toLowerCase().includes("hız") || name.toLowerCase().includes("itme")) { min=10; max=100; val=50; unit=" m/s"; }
-            else if(name.toLowerCase().includes("yerçekimi") || name.toLowerCase().includes("ivme")) { min=1; max=25; val=9.8; unit=" m/s²"; }
-            else if(name.toLowerCase().includes("kütle") || name.toLowerCase().includes("ağırlık")) { min=1; max=1000; val=10; unit=" kg"; }
+            if(safeNameStr.includes("hız") || safeNameStr.includes("itme")) { min=10; max=100; val=50; unit=" m/s"; }
+            else if(safeNameStr.includes("yerçekimi") || safeNameStr.includes("ivme")) { min=1; max=25; val=9.8; unit=" m/s²"; }
+            else if(safeNameStr.includes("kütle") || safeNameStr.includes("ağırlık")) { min=1; max=1000; val=10; unit=" kg"; }
             else { min=0; max=100; val=50; unit=""; }
 
             group.innerHTML = `
@@ -155,9 +157,12 @@
 
         function updateValue(id, val, originalName) {
             document.getElementById(id + 'Val').innerText = val;
-            if(originalName.toLowerCase().includes("hız") || originalName.toLowerCase().includes("itme")) v0 = parseFloat(val);
-            if(originalName.toLowerCase().includes("yerçekimi") || originalName.toLowerCase().includes("ivme")) gravity = parseFloat(val);
-            if(originalName.toLowerCase().includes("kütle") || originalName.toLowerCase().includes("ağırlık")) massTested = true;
+            
+            const safeNameStr = originalName.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
+            
+            if(safeNameStr.includes("hız") || safeNameStr.includes("itme")) v0 = parseFloat(val);
+            if(safeNameStr.includes("yerçekimi") || safeNameStr.includes("ivme")) gravity = parseFloat(val);
+            if(safeNameStr.includes("kütle") || safeNameStr.includes("ağırlık")) massTested = true;
         }
 
         async function sendChat() {
@@ -243,10 +248,16 @@
             }, 3000);
             
             const currentD = lastDistance.toFixed(1);
-            const hasV0 = unlockedVariables.some(v => v.toLowerCase().includes("hız") || v.toLowerCase().includes("itme"));
-            const hasG = unlockedVariables.some(v => v.toLowerCase().includes("yerçekimi") || v.toLowerCase().includes("ivme"));
             
-            // SİSTEM MESAJLARI: Yapay zekaya sormadan direkt arayüzden basıyoruz! (Halüsinasyonları bitirir)
+            const hasV0 = unlockedVariables.some(v => {
+                const s = v.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
+                return s.includes("hız") || s.includes("itme");
+            });
+            const hasG = unlockedVariables.some(v => {
+                const s = v.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
+                return s.includes("yerçekimi") || s.includes("ivme");
+            });
+            
             let aiMessage = "";
             let triggerReport = false;
 
@@ -277,7 +288,6 @@
             addMsg('sys-msg', `💥 <b>${status}</b>`);
             addMsg('ai-msg', aiMessage);
             
-            // Öğrenci sonradan cevap verdiğinde AI bağlamı bilsin diye hafızaya ekliyoruz
             chatMemory.push({role: "assistant", content: aiMessage});
             if(chatMemory.length > 6) chatMemory.shift();
             
@@ -295,34 +305,28 @@
             renderer.render(scene, camera);
         }
 
-        // DETAYLI PARAMETRE BAZLI RAPOR OLUŞTURMA MANTIĞI
         function generateReport() {
             let totalShots = launchHistory.length;
             
-            // --- Açı Analizi ---
             let angles = launchHistory.map(h => h.angle);
             let minAngle = Math.min(...angles), maxAngle = Math.max(...angles);
             let angleStr = `Ağırlıklı olarak <b>${minAngle}° ile ${maxAngle}°</b> bandında denemeler yaptın. Sonunda optimum eğimi buldun.`;
 
-            // --- Hız Analizi ---
             let highSpeedCount = launchHistory.filter(h => h.v0 > 60).length;
             let speedPercent = totalShots > 0 ? Math.round((highSpeedCount / totalShots) * 100) : 0;
             let speedStr = speedPercent > 50 ? 
                 `Atışlarının <b>%${speedPercent}'i</b> yüksek hızlı (>60 m/s) fırlatmalardı. Güçlü motorlar kullanmayı seviyorsun!` : 
                 `Atışlarının <b>%${100 - speedPercent}'i</b> düşük, kontrollü hızlardaydı. Temkinli ve isabet odaklı bir profil çizdin.`;
 
-            // --- Yerçekimi Analizi ---
             let alienGravityCount = launchHistory.filter(h => h.gravity !== 9.8).length;
             let gravityStr = alienGravityCount > 0 ? 
                 `Atışlarının <b>${alienGravityCount} tanesinde</b> yerçekimini değiştirerek Dünya dışı koşulları (farklı gezegenleri) simüle ettin.` : 
                 `Tüm atışlarını Dünya standartlarında (9.8 m/s²) gerçekleştirdin. Gezegenler arası keşfe çıkmadın.`;
 
-            // --- Kütle Analizi ---
             let massStr = massTested ? 
                 "Kütleyi de test ettin! Ancak sonucun değişmediğini görerek, sürtünmesiz ortamda kütlenin menzile etki etmediğini bizzat kanıtladın. Harika bir bilimsel duruş. 🎯" : 
                 "Roketin ağır veya hafif olmasının menzili etkileyeceğini düşünmedin, doğrudan hareket denklemlerine odaklandın. (Zaten kütlenin bu denklemde rolü yok!)";
             
-            // --- Reaksiyon Süresi ---
             let avgTimeStr = "Ölçülemedi";
             if (timeData.reactionTimes.length > 0) {
                 let avg = timeData.reactionTimes.reduce((a, b) => a + b, 0) / timeData.reactionTimes.length;
