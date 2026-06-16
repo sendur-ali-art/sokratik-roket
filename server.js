@@ -22,13 +22,14 @@ JSON Formatı: {"reply": "...", "action": "SHOW_SLIDER" | "NONE", "variable": "S
 
 ADIM 1: SÜRGÜ AÇMA VE ONAY (Örn: "İvme aç", "Hızı ekle", "Evet", "Açalım", "Evet ivme aç")
 - Öğrenci bir değişkeni açmak istiyorsa VEYA senin "Açayım mı?" soruna onay veriyorsa:
-- İstenen fiziksel kavramı belirle. Kavram "Hız" ise "İlk Hız", "İvme" veya "Yerçekimi" ise "Yerçekimi İvmesi" isimlerini kullan.
-- EĞER AÇIK SÜRGÜLER LİSTESİNDE YOKSA: action: "SHOW_SLIDER", variable: "[Standart Kavram Adı]", reply: "Harika! Sürgüyü ekrana getiriyorum, hemen test edip sonuçlara bakalım."
+- İstenen kavramı belirle ("İlk Hız", "Yerçekimi İvmesi" veya "Kütle" olarak adlandır).
+- EĞER BU KAVRAM AÇIK SÜRGÜLER LİSTESİNDE YOKSA: action: "SHOW_SLIDER", variable: "[Standart Kavram Adı]", reply: "Harika! Sürgüyü ekrana getiriyorum, hemen test edip sonuçlara bakalım."
 - EĞER ZATEN AÇIKSA: action: "NONE", reply: "Bu değişken zaten açık, ekrandan değerini değiştirebilirsin!"
 
 ADIM 2: FİKİR BEYANI (Örn: "İvme olabilir", "Bence hız", "Kütle?")
 - Öğrenci bir fikir söylüyor ama açıkça "aç", "ekle" veya "evet" demiyorsa:
-- action: "NONE", reply: "Çok mantıklı! [Sadece Kavram Adı] sürgüsünü açıp test etmek ister misin? 'Evet, aç' demen yeterli."
+- EĞER AÇIK SÜRGÜLER LİSTESİNDE YOKSA: action: "NONE", reply: "Çok mantıklı! [Standart Kavram Adı] sürgüsünü açıp test etmek ister misin? 'Evet, aç' demen yeterli."
+- EĞER ZATEN AÇIKSA: action: "NONE", reply: "Bu değişken zaten açık, ekrandan değerini değiştirebilirsin!"
 
 ADIM 3: GÖZLEM (Örn: "Etkiledi", "Değişmedi", "Daha uzağa gitti")
 - Öğrenci bir deney sonucu paylaşıyorsa:
@@ -38,7 +39,7 @@ ADIM 4: GÜNLÜK DİL / RET (Örn: "Yok", "Hayır", "Bilmiyorum", "Mesafe", "Sa�
 - Öğrenci reddederse veya konudan saparsa: action: "NONE", reply: "Anlıyorum. Peki sence roketin fırlatılışında neleri değiştirirsek daha uzağa gider?"
 
 ÖĞRENCİNİN ANLIK DURUMU:
-- AÇIK SÜRGÜLER: [${context.unlockedVariables}]`;
+- AÇIK SÜRGÜLER: [${context.unlockedVariables}] (Bilgi: Eğer bu listede 'İlk Hız' yazıyorsa 'Hız' zaten açıktır. 'Yerçekimi İvmesi' yazıyorsa 'İvme' zaten açıktır. Tekrar açmaya çalışma!)`;
 
         const messages = [
             { role: "system", content: systemPrompt },
