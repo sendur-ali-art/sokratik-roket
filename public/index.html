@@ -123,19 +123,18 @@
     </div>
 
     <script>
-        // KULLANICI VE ANALİTİK VERİLERİ
+        // KULLANICI VE ANALİTİK VERİLERİ (İSTENEN ÖZEL FORMATTA)
         let userName = "";
         let isNameSet = false;
         let fullChatHistory = ["Asistan: Hoş geldin! Bu laboratuvar, hava sürtünmesinin olmadığı ideal bir fizik simülasyonudur. Denemelere başlamadan önce, sana nasıl hitap etmemi istersin?"];
         
+        let appStartTime = null;
         let stats = {
-            startTime: Date.now(),
-            speedUnlockTime: null,
-            speedUnlockShots: 0,
-            wrongAttemptsBeforeSpeed: 0,
-            systemHintGiven: false,
-            timeAfterHintToSolve: null,
-            lastHintTimestamp: null
+            vars: {
+                "İlk Hız": { time: null, shotsToFind: 0, hints: false },
+                "Yerçekimi İvmesi": { time: null, shotsToFind: 0, hints: false }
+            },
+            others: [] // { name: "Rüzgar", time: 12.5, hints: true, openTime: Date.now(), resolved: false }
         };
 
         let attempts = 0, consecutiveFailures = 0, lastDistance = 0, flightStatus = "Bekliyor";
@@ -144,8 +143,8 @@
         let isLaunched = false, time = 0, theta = 0, startX = 0, startY = 0;
 
         let launchHistory = [];
-        let massTested = false;
         let currentTestVariable = "Fırlatma Açısı";
+        let currentVarHints = 0;
         let chatMemory = [];
         let chartInstance = null;
 
@@ -173,18 +172,21 @@
             if (unlockedVariables.includes(name)) return;
             unlockedVariables.push(name);
             currentTestVariable = name;
+            currentVarHints = 0; // İpucu sayacını sıfırla
             
+            let timeElapsed = ((Date.now() - appStartTime) / 1000).toFixed(1);
             const safeNameStr = name.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
             
-            // Hız Analitiği Takibi
+            // Analitik Kayıtları
             if(safeNameStr.includes("hız") || safeNameStr.includes("itme")) {
-                stats.speedUnlockTime = Date.now();
-                stats.speedUnlockShots = attempts;
-            }
-
-            // İpucu sonrası çözme süresi analitiği
-            if (stats.lastHintTimestamp && !stats.timeAfterHintToSolve) {
-                stats.timeAfterHintToSolve = ((Date.now() - stats.lastHintTimestamp) / 1000).toFixed(1);
+                stats.vars["İlk Hız"].time = timeElapsed;
+                stats.vars["İlk Hız"].shotsToFind = attempts;
+            } else if(safeNameStr.includes("ivme") || safeNameStr.includes("yerçekimi")) {
+                stats.vars["Yerçekimi İvmesi"].time = timeElapsed;
+                stats.vars["Yerçekimi İvmesi"].shotsToFind = attempts;
+            } else {
+                // Etkisiz Değişken Ekleme
+                stats.others.push({ name: name, openTime: Date.now(), time: null, hints: false, resolved: false });
             }
 
             const container = document.getElementById('dynamic-sliders');
@@ -214,7 +216,6 @@
             const safeNameStr = originalName.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
             if(safeNameStr.includes("hız") || safeNameStr.includes("itme")) v0 = parseFloat(val);
             if(safeNameStr.includes("yerçekimi") || safeNameStr.includes("ivme")) gravity = parseFloat(val);
-            if(safeNameStr.includes("kütle") || safeNameStr.includes("ağırlık") || safeNameStr.includes("hacim") || safeNameStr.includes("rüzgar")) massTested = true;
         }
 
         async function sendChat(forcedMessage = null, btnContainer = null) {
@@ -236,11 +237,11 @@
             if (!isNameSet) {
                 userName = message;
                 isNameSet = true;
+                appStartTime = Date.now();
                 document.getElementById('controls').style.display = 'block';
                 let welcomeMsg = `Tanıştığımıza memnun oldum, <b>${userName}</b>! Şu an sadece fırlatma açısını kontrol edebiliyoruz. Denemeye başla ve uçuşu etkileyecek değişkenleri bul.`;
                 addMsg('ai-msg', welcomeMsg);
                 fullChatHistory.push("Asistan: " + welcomeMsg.replace(/<[^>]*>?/gm, ''));
-                stats.startTime = Date.now(); // Sayaçları ismi aldıktan sonra başlat
                 return;
             }
 
@@ -252,15 +253,13 @@
 
             const hasV0 = unlockedVariables.some(v => v.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase().includes("hız"));
             const hasG = unlockedVariables.some(v => v.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase().includes("ivme"));
-            const hasAllMainVariables = hasV0 && hasG;
 
             const currentContext = {
                 userName: userName,
-                distance: lastDistance.toFixed(1),
                 unlockedVariables: unlockedVariables.join(", "),
                 activeTestVariable: currentTestVariable,
                 isEffectiveTruth: isEffective,
-                hasAllMainVariables: hasAllMainVariables
+                hasAllMainVariables: hasV0 && hasG
             };
             
             try {
@@ -272,15 +271,26 @@
                 const data = await response.json();
                 
                 if(data.reply) {
-                    addMsg('ai-msg', data.reply);
+                    // İPUCU KONTROLÜ (Analitik İçin)
+                    if (data.hintGiven) {
+                        if(safeNameStr.includes("hız")) stats.vars["İlk Hız"].hints = true;
+                        else if(safeNameStr.includes("ivme")) stats.vars["Yerçekimi İvmesi"].hints = true;
+                        else currentVarHints++;
+                    }
+
+                    // ETKİSİZ DEĞİŞKEN ÇÖZÜMÜ KONTROLÜ
+                    if (data.ineffectiveResolved) {
+                        let targetVar = stats.others.find(o => o.name === currentTestVariable && !o.resolved);
+                        if (targetVar) {
+                            targetVar.resolved = true;
+                            targetVar.time = ((Date.now() - targetVar.openTime) / 1000).toFixed(1);
+                            targetVar.hints = currentVarHints > 0;
+                        }
+                    }
+
+                    addMsg('ai-msg', data.reply, data.showOptions);
                     chatMemory.push({role: "assistant", content: data.reply});
                     if(chatMemory.length > 6) chatMemory.shift();
-
-                    // Sistem ipucu verdiyse takip et
-                    if (data.reply.includes("Emin misin?") || data.reply.includes("eksik") || data.reply.includes("tekrar test etmelisin")) {
-                        stats.systemHintGiven = true;
-                        stats.lastHintTimestamp = Date.now();
-                    }
                 }
                 
                 if(data.action === "SHOW_SLIDER") createSlider(data.variable);
@@ -288,14 +298,14 @@
             } catch (err) { console.error(err); }
         }
 
-        function addMsg(type, text) {
+        function addMsg(type, text, showOptions = false) {
             let finalHtml = text;
             
-            if (type === 'ai-msg' && text.includes("BAŞKA ne olabilir")) {
+            if (showOptions) {
                 finalHtml += `<div style="margin-top:15px; display:flex; gap:8px;">
-                    <button onclick="sendChat('Başka var', this.parentElement)" style="flex:1; padding:8px; background:#0097e6; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">➕ Başka Var</button>
-                    <button onclick="sendChat('Başka yok', this.parentElement)" style="flex:1; padding:8px; background:#e84118; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">🛑 Başka Yok</button>
-                    <button onclick="sendChat('Emin değilim', this.parentElement)" style="flex:1; padding:8px; background:#7f8c8d; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">🤔 Emin Değilim</button>
+                    <button onclick="sendChat('Fikir: Başka var', this.parentElement)" style="flex:1; padding:8px; background:#0097e6; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">➕ Başka Var</button>
+                    <button onclick="sendChat('Fikir: Başka yok', this.parentElement)" style="flex:1; padding:8px; background:#e84118; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">🛑 Başka Yok</button>
+                    <button onclick="sendChat('Fikir: Emin değilim', this.parentElement)" style="flex:1; padding:8px; background:#7f8c8d; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">🤔 Emin Değilim</button>
                 </div>`;
             }
 
@@ -305,7 +315,6 @@
             document.getElementById('chat-history').appendChild(div);
             div.scrollIntoView();
 
-            // Geçmişi TXT için temizle ve kaydet
             const cleanText = finalHtml.replace(/<button.*?>.*?<\/button>/gi, '').replace(/<[^>]*>?/gm, '').trim();
             const sender = type === 'user-msg' ? userName : 'Asistan';
             fullChatHistory.push(`${sender}: ${cleanText}`);
@@ -340,12 +349,7 @@
         function resetRocket(status) {
             isLaunched = false;
             flightStatus = status;
-            if(status !== "BAŞARILI") {
-                consecutiveFailures++; 
-                if(!stats.speedUnlockTime) stats.wrongAttemptsBeforeSpeed++; // Hız bulunana kadar kaç karavana atıldı
-            } else {
-                consecutiveFailures = 0;
-            }
+            if(status !== "BAŞARILI") consecutiveFailures++; else consecutiveFailures = 0;
 
             document.querySelector('.launch-btn').innerText = "DÜŞÜNÜLÜYOR... (3s)";
             isCooldown = true;
@@ -364,8 +368,12 @@
             if (status === "BAŞARILI") {
                 if (!(hasV0 && hasG)) {
                     aiMessage = `Tebrikler ${userName}, hedefi tam isabetle vurdun! Peki sence uçuş mesafesini etkileyebilecek BAŞKA ne olabilir?`;
+                    addMsg('sys-msg', `💥 <b>${status}</b>`);
+                    addMsg('ai-msg', aiMessage, true);
                 } else {
                     aiMessage = `Mükemmel iş çıkardın ${userName}! Ana değişkenleri keşfettik ve hedefi vurduk. Matematiksel modeli ve başarının raporunu inceleyebilirsin.`;
+                    addMsg('sys-msg', `💥 <b>${status}</b>`);
+                    addMsg('ai-msg', aiMessage);
                     document.getElementById('reportBtn').style.display = 'block';
                     document.getElementById('formulaBtn').style.display = 'block';
                     generateReport();
@@ -373,14 +381,13 @@
             } else {
                 aiMessage = `Atış tamamlandı. Roket ${currentD} metre mesafeye gitti. En son <b>"${currentTestVariable}"</b> ayarı ile oynadığını görüyorum. Sence bu değişiklik menzili etkiledi mi?`;
                 aiMessage += `<div style="margin-top:15px; display:flex; gap:8px;">
-                    <button onclick="sendChat('Evet, etkiledi.', this.parentElement)" style="flex:1; padding:10px; background:#27ae60; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold;">✅ Etkiledi</button>
-                    <button onclick="sendChat('Hayır, etkilemedi.', this.parentElement)" style="flex:1; padding:10px; background:#e84118; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold;">❌ Etkilemedi</button>
-                    <button onclick="sendChat('Emin değilim.', this.parentElement)" style="flex:1; padding:10px; background:#7f8c8d; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold;">🤔 Emin Değilim</button>
+                    <button onclick="sendChat('Gözlem: Etkiledi.', this.parentElement)" style="flex:1; padding:10px; background:#27ae60; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold;">✅ Etkiledi</button>
+                    <button onclick="sendChat('Gözlem: Etkilemedi.', this.parentElement)" style="flex:1; padding:10px; background:#e84118; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold;">❌ Etkilemedi</button>
+                    <button onclick="sendChat('Gözlem: Emin değilim.', this.parentElement)" style="flex:1; padding:10px; background:#7f8c8d; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold;">🤔 Emin Değilim</button>
                 </div>`;
+                addMsg('sys-msg', `💥 <b>${status}</b>`);
+                addMsg('ai-msg', aiMessage);
             }
-
-            addMsg('sys-msg', `💥 <b>${status}</b>`);
-            addMsg('ai-msg', aiMessage);
             
             chatMemory.push({role: "assistant", content: aiMessage.split("<div")[0]});
             if(chatMemory.length > 6) chatMemory.shift();
@@ -398,7 +405,6 @@
             if(chartInstance) chartInstance.destroy();
             
             let angles = [], ranges = [], times = [];
-            // O anki hız ve ivme ayarlarına göre menzil hesapla
             for(let a=10; a<=80; a+=5){
                 angles.push(a + '°');
                 let rad = a * Math.PI / 180;
@@ -433,24 +439,16 @@
         function generateReport() {
             let totalShots = launchHistory.length;
             let finalShot = launchHistory[launchHistory.length - 1] || {angle: 45, v0: 50, gravity: 9.8};
-            
-            // Hız Analitiği
-            let speedStatsStr = stats.speedUnlockTime ? 
-                `<b>${stats.speedUnlockShots}</b> atış ve <b>${stats.wrongAttemptsBeforeSpeed}</b> yanlış deneme sonrası <b>${((stats.speedUnlockTime - stats.startTime)/1000).toFixed(1)} saniyede</b> keşfedildi.` : 
-                "Keşfedilemedi.";
-            
-            // Sistem Yönlendirmesi
-            let hintStr = stats.systemHintGiven ? 
-                `Sistem yönlendirmesine ihtiyaç duydu. Yönlendirme sonrası doğru mantığı <b>${stats.timeAfterHintToSolve || '?'} sn</b> içinde kavradı.` : 
-                "Hiçbir ipucuna veya sistem yönlendirmesine ihtiyaç duymadan tamamen kendi başına çözdü! 🧠";
+
+            // Etkisiz değişken listesini (sadece çözülmüş olanları) filtrele
+            let resolvedOthers = stats.others.filter(o => o.resolved);
 
             document.getElementById('reportContent').innerHTML = `
                 <div class="dashboard-grid">
                     <div class="dashboard-card" style="grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center;">
                         <div>
                             <h3 style="margin-top:0; color:#e1b12c;">👤 Laboratuvar Özeti: ${userName}</h3>
-                            <p style="margin-bottom:0;">Hedefi tüm parametrelerle vurana kadar <b>${totalShots}</b> roket fırlattın.</p>
-                            <p style="margin-top:5px; font-size:13px; color:#bdc3c7;">Yönlendirme Durumu: ${hintStr}</p>
+                            <p style="margin-bottom:0;">Hedefi tüm parametrelerle vurana kadar toplam <b>${totalShots}</b> atış yaptın.</p>
                         </div>
                         <div style="text-align:right; border-left:2px solid #718093; padding-left:15px;">
                             <h3 style="margin-top:0; color:#27ae60;">🏆 Mükemmel Atış</h3>
@@ -458,14 +456,22 @@
                         </div>
                     </div>
 
-                    <div class="dashboard-card" style="border-left-color: #e84118;">
-                        <h3 style="margin-top:0; color:#e84118;">🚀 Hız Değişkeni Analitiği</h3>
-                        <p>${speedStatsStr}</p>
+                    <div class="dashboard-card" style="border-left-color: #f39c12;">
+                        <h3 style="margin-top:0; color:#f39c12;">🔍 3 Ana Değişkeni Keşif Süreci</h3>
+                        <ul style="padding-left:20px; font-size:13px; line-height:1.6;">
+                            <li><b>Fırlatma Açısı:</b> En baştan beri aktifti.</li>
+                            <li><b>İlk Hız:</b> ${stats.vars["İlk Hız"].time ? `<b>${stats.vars["İlk Hız"].time} saniyede</b> ve ${stats.vars["İlk Hız"].shotsToFind}. atıştan sonra buldu ` + (stats.vars["İlk Hız"].hints ? '<span style="color:#e74c3c">(Sistem yönlendirdi)</span>' : '<span style="color:#2ecc71">(Kendi buldu)</span>') : '<span style="color:#e74c3c">Bulunamadı</span>'}</li>
+                            <li><b>Yerçekimi İvmesi:</b> ${stats.vars["Yerçekimi İvmesi"].time ? `<b>${stats.vars["Yerçekimi İvmesi"].time} saniyede</b> ve ${stats.vars["Yerçekimi İvmesi"].shotsToFind}. atıştan sonra buldu ` + (stats.vars["Yerçekimi İvmesi"].hints ? '<span style="color:#e74c3c">(Sistem yönlendirdi)</span>' : '<span style="color:#2ecc71">(Kendi buldu)</span>') : '<span style="color:#e74c3c">Bulunamadı</span>'}</li>
+                        </ul>
                     </div>
 
                     <div class="dashboard-card" style="border-left-color: #9b59b6;">
-                        <h3 style="margin-top:0; color:#9b59b6;">💡 Kavramsal Kazanımlar</h3>
-                        <p>${massTested ? "Fiziksel olarak etkisiz değişkenleri (Kütle, Hacim vb.) test ederek sürtünmesiz laboratuvar kurallarını bizzat kanıtladın." : "Sadece formüldeki hareket denklemlerine odaklandın."}</p>
+                        <h3 style="margin-top:0; color:#9b59b6;">🛡️ Yanılgıları Yıkma (Etkisiz Değişkenler)</h3>
+                        ${resolvedOthers.length > 0 ? 
+                            `<ul style="padding-left:20px; font-size:13px; line-height:1.6;">` + 
+                            resolvedOthers.map(o => `<li><b>${o.name}:</b> Etkisiz olduğunu test edip <b>${o.time} saniyede</b> kanıtladı ${o.hints ? '<span style="color:#e74c3c">(Sistem yönlendirdi)</span>' : '<span style="color:#2ecc71">(Kendi buldu)</span>'}</li>`).join('') + 
+                            `</ul>` 
+                            : `<p style="font-size:13px; color:#bdc3c7;">Formül dışı hiçbir değişken test edilmedi. Doğrudan sonuca odaklanıldı.</p>`}
                     </div>
                 </div>
             `;
