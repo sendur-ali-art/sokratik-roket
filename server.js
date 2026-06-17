@@ -18,49 +18,52 @@ app.post('/api/chat', async (req, res) => {
         
         let systemPrompt = "";
         let useTools = false;
+        
+        // İsmi değişkene atayalım
+        const studentName = context.userName || "Öğrenci";
 
         // KURŞUN GEÇİRMEZ ALGORİTMA: Yapay zeka karar vermiyor, biz onu tek bir senaryoya zorluyoruz!
         if (msg.includes("etkiledi") && !msg.includes("etkilemedi")) {
             if (context.isEffectiveTruth === true || context.isEffectiveTruth === "true") {
                 // Doğru Bildi (Etkili değişken)
-                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci "${context.activeTestVariable}" değişkeninin menzili etkilediğini doğru saptadı. 
-                Ona bu gözlemini onaylayan samimi bir tebrik cümlesi kur ve KESİNLİKLE şu soruyla bitir: "Peki sence uçuşu etkileyecek BAŞKA ne olabilir?"
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrencinin adı ${studentName}. Öğrenci "${context.activeTestVariable}" değişkeninin menzili etkilediğini doğru saptadı. 
+                Ona ismiyle hitap ederek bu gözlemini onaylayan samimi bir tebrik cümlesi kur ve KESİNLİKLE şu soruyla bitir: "Peki sence uçuşu etkileyecek BAŞKA ne olabilir?"
                 SAKIN sürtünmesiz/ideal ortam açıklaması yapma, çünkü bu değişken zaten etkilidir!`;
             } else {
                 // Yanlış Bildi (Etkisiz değişkeni etkiledi sandı)
-                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci "${context.activeTestVariable}" değişkeninin menzili etkilediğini sandı fakat bu değişken etkisizdir.
-                Görevin öğrenciye KESİNLİKLE şu yanıtı vermektir: "Buna emin misin? Bence aynı anda birden fazla ayarla oynadın. Diğerlerini sabit tutup SADECE bu ayarı değiştirerek tekrar denemelisin!"`;
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrencinin adı ${studentName}. Öğrenci "${context.activeTestVariable}" değişkeninin menzili etkilediğini sandı fakat bu değişken etkisizdir.
+                Görevin öğrenciye KESİNLİKLE şu yanıtı vermektir: "Buna emin misin ${studentName}? Bence aynı anda birden fazla ayarla oynadın. Diğerlerini sabit tutup SADECE bu ayarı değiştirerek tekrar denemelisin!"`;
             }
         } 
         else if (msg.includes("etkilemedi")) {
             if (context.isEffectiveTruth === true || context.isEffectiveTruth === "true") {
                 // Yanlış Bildi (Etkili değişkene etkilemedi dedi)
-                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci "${context.activeTestVariable}" ayarının menzili etkilemediğini sandı fakat bu değişken KESİNLİKLE etkilidir.
-                Görevin öğrenciye KESİNLİKLE tam olarak şu yanıtı vermektir: "Buna emin misin? Bence diğer ayarları sabit tutup bu değişkeni bir kez daha test etmelisin!"`;
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrencinin adı ${studentName}. Öğrenci "${context.activeTestVariable}" ayarının menzili etkilemediğini sandı fakat bu değişken KESİNLİKLE etkilidir.
+                Görevin öğrenciye KESİNLİKLE tam olarak şu yanıtı vermektir: "Buna emin misin ${studentName}? Bence diğer ayarları sabit tutup bu değişkeni bir kez daha test etmelisin!"`;
             } else {
                 // Doğru Bildi (Etkisiz değişkenin etkilemediğini saptadı)
-                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci "${context.activeTestVariable}" değişkeninin menzili etkilemediğini doğru bildi.
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrencinin adı ${studentName}. Öğrenci "${context.activeTestVariable}" değişkeninin menzili etkilemediğini doğru bildi.
                 Görevin onu tebrik etmek ve KESİNLİKLE şu açıklamayı yaparak bitirmektir: "Mükemmel bir tespit! Hatırlarsan en başta bu laboratuvarın 'sürtünmesiz ve ideal bir ortam' olduğunu konuşmuştuk. İşte bu yüzden test ettiğin bu değişken menzile etki etmiyor. Peki sence uçuşu gerçekten etkileyecek BAŞKA ne olabilir?"`;
             }
         } 
         else if (msg.includes("emin değilim")) {
-            systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci emin olmadığını belirtti. Görevin ona tam olarak şu yanıtı vermektir: "Bilim deneme yanılma işidir. Diğer ayarları sabit bırakıp tekrar ateşle."`;
+            systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrencinin adı ${studentName}. Öğrenci emin olmadığını belirtti. Görevin ona tam olarak şu yanıtı vermektir: "Bilim deneme yanılma işidir. Diğer ayarları sabit bırakıp tekrar ateşle."`;
         } 
         else if (msg.includes("başka yok")) {
             if (context.hasAllMainVariables === true || context.hasAllMainVariables === "true") {
-                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci tüm ana parametreleri (Açı, Hız, İvme) başarıyla buldu ve başka yok dedi.
-                Görevin ona coşkulu bir başarı mesajı vererek şunu demektir: "Harika! Formülün tüm parçalarını buldun. Şimdi bu 3 değişkeni (Açı, Hız, İvme) en doğru şekilde ayarlayarak 150m ilerideki hedefi tam isabetle vurma zamanı! Başarılar!"`;
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrencinin adı ${studentName}. Öğrenci tüm ana parametreleri (Açı, Hız, İvme) başarıyla buldu ve başka yok dedi.
+                Görevin ona coşkulu bir başarı mesajı vererek şunu demektir: "Harika ${studentName}! Formülün tüm parçalarını buldun. Şimdi bu 3 değişkeni (Açı, Hız, İvme) en doğru şekilde ayarlayarak 150m ilerideki hedefi tam isabetle vurma zamanı! Başarılar!"`;
             } else {
-                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci henüz tüm değişkenleri bulamadığı halde başka yok dedi. Görevin ona şunu demektir: "Emin misin? Bence formülde menzili doğrudan etkileyen çok temel bir fizik kuralı daha eksik. Biraz daha düşün."`;
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrencinin adı ${studentName}. Öğrenci henüz tüm değişkenleri bulamadığı halde başka yok dedi. Görevin ona şunu demektir: "Emin misin ${studentName}? Bence formülde menzili doğrudan etkileyen çok temel bir fizik kuralı daha eksik. Biraz daha düşün."`;
             }
         } 
         else if (msg.includes("başka var")) {
-            systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci yeni şeyler arıyor. Görevin ona tam olarak şunu demektir: "Harika, bilim sorgulamaktır! Aklına ne geliyor? Söyle, sürgüsünü açıp test edelim."`;
+            systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrencinin adı ${studentName}. Öğrenci yeni şeyler arıyor. Görevin ona tam olarak şunu demektir: "Harika, bilim sorgulamaktır! Aklına ne geliyor? Söyle, sürgüsünü açıp test edelim."`;
         } 
         else {
             // Genel sohbet, serbest fikir beyanları veya sürgü açma istekleri
             useTools = true;
-            systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Görevin öğrencinin fikirlerini dinlemek, onları test etmeye teşvik etmek ve eğer yeni bir sürgü açmak istiyorsa 'show_slider' aracını kullanmaktır. Doğal, samimi bir Türkçe kullan.
+            systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrencinin adı ${studentName}. Görevin öğrencinin fikirlerini dinlemek, onları test etmeye teşvik etmek ve eğer yeni bir sürgü açmak istiyorsa 'show_slider' aracını kullanmaktır. Gerektiğinde doğal bir şekilde ismiyle hitap et.
             
             FİZİKSEL MODEL:
             - Menzili KESİNLİKLE ETKİLEYENLER: Fırlatma Açısı, İlk Hız, Yerçekimi İvmesi.
