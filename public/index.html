@@ -42,7 +42,7 @@
     <div id="ui-panel">
         <div id="header">🚀 Sokratik Fizik Laboratuvarı</div>
         <div id="chat-history">
-            <div class="msg ai-msg">Hoş geldin! Hedefimiz 150m ilerideki platform. Şu an sadece fırlatma açısını kontrol edebiliyoruz. Denemeye başla ve uçuşu etkileyecek değişkenleri bul</div>
+            <div class="msg ai-msg">Hoş geldin! Bu laboratuvar, hava sürtünmesinin olmadığı ideal bir fizik simülasyonudur. Hedefimiz 150m ilerideki platform. Şu an sadece fırlatma açısını kontrol edebiliyoruz. Denemeye başla ve uçuşu etkileyecek değişkenleri bul.</div>
         </div>
         <div id="chat-input-area">
             <input type="text" id="userInput" placeholder="Fikirlerini buraya yaz..." onkeypress="if(event.key === 'Enter') sendChat()">
@@ -144,7 +144,7 @@
             let min=1, max=100, val=50, unit="";
             if(safeNameStr.includes("hız") || safeNameStr.includes("itme")) { min=10; max=100; val=50; unit=" m/s"; }
             else if(safeNameStr.includes("yerçekimi") || safeNameStr.includes("ivme")) { min=1; max=25; val=9.8; unit=" m/s²"; }
-            else if(safeNameStr.includes("kütle") || safeNameStr.includes("ağırlık")) { min=1; max=1000; val=10; unit=" kg"; }
+            else if(safeNameStr.includes("kütle") || safeNameStr.includes("ağırlık") || safeNameStr.includes("hacim")) { min=1; max=1000; val=10; unit=" kg/br"; }
             else { min=0; max=100; val=50; unit=""; }
 
             group.innerHTML = `
@@ -162,7 +162,7 @@
             
             if(safeNameStr.includes("hız") || safeNameStr.includes("itme")) v0 = parseFloat(val);
             if(safeNameStr.includes("yerçekimi") || safeNameStr.includes("ivme")) gravity = parseFloat(val);
-            if(safeNameStr.includes("kütle") || safeNameStr.includes("ağırlık")) massTested = true;
+            if(safeNameStr.includes("kütle") || safeNameStr.includes("ağırlık") || safeNameStr.includes("hacim") || safeNameStr.includes("rüzgar")) massTested = true;
         }
 
         async function sendChat() {
@@ -324,8 +324,8 @@
                 `Tüm atışlarını Dünya standartlarında (9.8 m/s²) gerçekleştirdin. Gezegenler arası keşfe çıkmadın.`;
 
             let massStr = massTested ? 
-                "Kütleyi de test ettin! Ancak sonucun değişmediğini görerek, sürtünmesiz ortamda kütlenin menzile etki etmediğini bizzat kanıtladın. Harika bir bilimsel duruş. 🎯" : 
-                "Roketin ağır veya hafif olmasının menzili etkileyeceğini düşünmedin, doğrudan hareket denklemlerine odaklandın. (Zaten kütlenin bu denklemde rolü yok!)";
+                "Kütle (veya benzeri etkenleri) de test ettin! Ancak sonucun değişmediğini görerek, sürtünmesiz ortamda bunların menzile etki etmediğini bizzat kanıtladın. Harika bir bilimsel duruş. 🎯" : 
+                "Roketin ağır veya hafif olmasının menzili etkileyeceğini düşünmedin, doğrudan hareket denklemlerine odaklandın.";
             
             let avgTimeStr = "Ölçülemedi";
             if (timeData.reactionTimes.length > 0) {
@@ -365,7 +365,7 @@
                     </div>
 
                     <div class="dashboard-card" style="border-left-color: #9b59b6;">
-                        <h3 style="margin-top:0; color:#9b59b6;">⚖️ Kütle Yanılgısı Testi</h3>
+                        <h3 style="margin-top:0; color:#9b59b6;">⚖️ Etkisiz Değişkenler Testi</h3>
                         <p>${massStr}</p>
                     </div>
                 </div>
