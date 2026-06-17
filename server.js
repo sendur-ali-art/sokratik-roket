@@ -17,51 +17,50 @@ app.post('/api/chat', async (req, res) => {
         
         const systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın.
 
-GÖREVİN: Öğrencinin mesajını analiz edip SADECE aşağıdaki JSON formatında yanıt vermek:
-{
-  "dusunce_sureci": "1. Niyet nedir? 2. Standart Kavram nedir? 3. Kavram aktif listede var mı? 4. Kavram 'Kütle' mi yoksa diğerlerinden (Açı/Hız/İvme) biri mi? 5. Hangi KURAL uygulanacak?",
-  "reply": "...",
-  "action": "SHOW_SLIDER" veya "NONE",
-  "variable": "Standart Kavram Adı" veya "NONE"
-}
+--- FİZİKSEL GERÇEKLİK (JAVASCRIPT TARAFINDAN KESİN OLARAK HESAPLANDI) ---
+Öğrencinin test ettiği veya üzerine konuştuğu son değişken: "${context.activeTestVariable}"
+Matematiksel Gerçek: Bu değişken menzili ${context.isEffectiveTruth ? "KESİNLİKLE ETKİLER" : "HİÇ ETKİLEMEZ (Çünkü sürtünmesiz ortam)"}.
 
---- 1. KAVRAM STANDARTLAŞTIRMA ---
-Mesajda geçen kavramı SADECE şu 4 standart terimden birine çevir (Hiçbiri yoksa "NONE" yap):
-- "Fırlatma Açısı" (açı, eğim, derece)
-- "İlk Hız" (hız, itme, sürat)
-- "Yerçekimi İvmesi" (ivme, yerçekimi, gezegen)
-- "Kütle" (ağırlık, hacim, boyut)
+--- SOKRATİK GÖREVLERİN ---
+1. YENİ SÜRGÜ AÇMA (Öğrenci Kütle, Hız, Hacim vb. herhangi bir şeyi ekranda görmek isterse):
+   'show_slider' aracını (tool) kullan ve "Harika fikir! Sürgüyü ekrana getiriyorum" de.
 
---- 2. AÇIK SÜRGÜ DURUMU KONTROLÜ ---
-AKTİF LİSTE: [${context.unlockedVariables}]
-- Seçtiğin Standart Kavram BİREBİR bu listede yazıyorsa -> AÇIKTIR.
-- LİSTEDE YOKSA veya "NONE" ise -> KESİNLİKLE KAPALIDIR. (Kapalıya asla 'zaten açık' deme).
+2. ÖĞRENCİNİN GÖZLEMİNİ DEĞERLENDİRME (Öğrenci "Etkiledi", "Etkilemedi" veya "Emin değilim" derse):
+   Öğrencinin söylediği şey ile yukarıdaki "Matematiksel Gerçek" UYUŞUYOR MU kontrol et:
+   
+   - EĞER UYUŞUYORSA (Doğru bildiyse): 
+     Onu tebrik et. "Mükemmel bilimsel tespit! Peki sence uçuşu etkileyecek BAŞKA ne olabilir?" de. (Not: Eğer bildiği şey etkisiz bir değişkense, ona 'Sürtünmesiz ortam olduğu için' kuralını da kısaca hatırlat).
+     
+   - EĞER UYUŞMUYORSA (Yanlış bildiyse): 
+     Cevabı ASLA verme! Sadece: "Buna emin misin? Bence diğer ayarları sabit tutup bu değişkeni bir kez daha test etmelisin!" diyerek onu tekrar denemeye it.
+     
+   - EĞER EMİN DEĞİLSE: 
+     "Bilim zaten deneme yanılma işidir! Diğer tüm sürgüleri sabit bırak ve sadece bu ayarı değiştirerek bir atış daha yap." diyerek cesaretlendir.
 
---- 3. KURAL AĞACI (SIRAYLA KONTROL ET, İLK UYANI UYGULA) ---
-
-KURAL A - SÜRGÜ AÇMA TALEBİ: Mesajda "aç", "ekle", "evet", "tamam" gibi net bir fiil VEYA onay varsa:
-- Sürgü KAPALIYSA -> action: "SHOW_SLIDER", variable: "[Standart Kavram]", reply: "Harika! Sürgüyü ekrana getiriyorum, hemen değerini değiştirip test edelim."
-- Sürgü AÇIKSA -> action: "NONE", reply: "[Standart Kavram] ayarı zaten ekranda açık! Sol taraftaki panelden değerini değiştirebilirsin."
-
-KURAL B - OLUMLU GÖZLEM (ETKİLEDİ): Mesajda "etkiler", "etkiliyor", "değiştirdi", "işe yaradı" gibi sonucun DEĞİŞTİĞİNİ belirten sözcükler varsa:
-- Sürgü KAPALIYSA -> action: "NONE", reply: "Bunu henüz test etmedik! Önce [Standart Kavram] sürgüsünü açıp gözlemlemek ister misin? 'Evet, aç' demen yeterli."
-- Sürgü AÇIKSA:
-  * DURUM 1 (Kavram "Kütle" İSE) -> reply: "Buna emin misin? Bence aynı anda birden fazla ayarla oynadın. Diğerlerini sabit tutup SADECE bu ayarı değiştirerek tekrar denemelisin."
-  * DURUM 2 (Kavram "Fırlatma Açısı", "İlk Hız" veya "Yerçekimi İvmesi" İSE) -> reply: "Harika bir bilimsel gözlem! Matematiksel modelde de [Standart Kavram] menzili doğrudan değiştirir. Peki uçuşu etkileyecek BAŞKA ne olabilir?"
-
-KURAL C - OLUMSUZ GÖZLEM (ETKİLEMEDİ): Mesajda "etkilemez", "etkilemiyor", "değiştirmedi", "işe yaramadı", "fark etmedi" gibi sonucun DEĞİŞMEDİĞİNİ belirten sözcükler varsa:
-- Sürgü KAPALIYSA -> action: "NONE", reply: "Bunu henüz test etmedik! Önce [Standart Kavram] sürgüsünü açıp gözlemlemek ister misin? 'Evet, aç' demen yeterli."
-- Sürgü AÇIKSA:
-  * DURUM 1 (Kavram "Kütle" İSE) -> reply: "Mükemmel bir bilimsel tespit! Hatırlarsan en başta bu laboratuvarın 'sürtünmesiz ve ideal bir ortam' olduğunu konuşmuştuk. İşte bu yüzden test ettiğin bu değişken menzile etki etmiyor. Bunu bizzat deneyerek kanıtlaman harika! Peki sence uçuşu gerçekten etkileyecek BAŞKA ne olabilir?"
-  * DURUM 2 (Kavram "Fırlatma Açısı", "İlk Hız" veya "Yerçekimi İvmesi" İSE) -> reply: "Buna emin misin? Bence diğer ayarları sabit tutup [Standart Kavram] ayarını bir kez daha test etmelisin!"
-
-KURAL D - FİKİR / SORU / KAVRAM İSMİ: Mesajda "olabilir", "etkiler mi" varsa VEYA sadece yalın bir kavram ismi yazılmışsa (örneğin sadece "hız" veya "ivme" yazdıysa):
-- Sürgü KAPALIYSA -> action: "NONE", reply: "Çok mantıklı bir düşünce! [Standart Kavram] sürgüsünü açıp test etmek ister misin? 'Evet, aç' demen yeterli."
-- Sürgü AÇIKSA -> action: "NONE", reply: "[Standart Kavram] sürgüsü zaten açık. Değerini değiştirerek sorunun cevabını bizzat test edebilirsin!"
-
-KURAL E - RET / BİTTİ / İLGİSİZ: Mesajda "yok", "hayır", "bilmiyorum", "bitti" varsa veya yukarıdaki 4 kuralın hiçbiri uymuyorsa:
-- action: "NONE", reply: "Anlıyorum. Peki sence roketin fırlatılışında veya ortam koşullarında neleri değiştirirsek menzil değişir?"
+--- DİKKAT ---
+- Şu an ekranda açık olan sürgüler: [${context.unlockedVariables}]. Zaten açık olan bir şeyi 'show_slider' aracı ile tekrar AÇMA! Sadece "Bu sol panelde zaten açık" de.
+- Çok doğal, dostane ve öğretici bir Türkçe kullan.
 `;
+
+        const tools = [
+            {
+                type: "function",
+                function: {
+                    name: "show_slider",
+                    description: "Öğrenci ekranda AÇIK OLMAYAN HERHANGİ BİR değişkeni (Hız, İvme, Hacim, Rüzgar, Kütle vb. ne isterse) test etmek istediğinde bu fonksiyonu çağır.",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            variable_name: {
+                                type: "string",
+                                description: "Ekranda açılacak değişkenin adı. Öğrenci ne söylediyse birebir onu yaz."
+                            }
+                        },
+                        required: ["variable_name"]
+                    }
+                }
+            }
+        ];
 
         const messages = [
             { role: "system", content: systemPrompt },
@@ -71,18 +70,34 @@ KURAL E - RET / BİTTİ / İLGİSİZ: Mesajda "yok", "hayır", "bilmiyorum", "bi
 
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
-            response_format: { type: "json_object" },
-            messages: messages
+            messages: messages,
+            tools: tools,
+            tool_choice: "auto"
         });
 
-        const aiData = JSON.parse(response.choices[0].message.content);
+        const responseMessage = response.choices[0].message;
         
-        console.log("AI Düşünce Süreci:", aiData.dusunce_sureci);
+        let replyText = responseMessage.content || "";
+        let action = "NONE";
+        let variable = "NONE";
+
+        if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+            const toolCall = responseMessage.tool_calls[0];
+            if (toolCall.function.name === "show_slider") {
+                const args = JSON.parse(toolCall.function.arguments);
+                action = "SHOW_SLIDER";
+                variable = args.variable_name; 
+                
+                if (!replyText) {
+                    replyText = `Harika bir fikir! ${variable} ayarını ekrana getiriyorum. Hemen değerini değiştirip test edelim.`;
+                }
+            }
+        }
 
         res.json({
-            reply: aiData.reply,
-            action: aiData.action,
-            variable: aiData.variable
+            reply: replyText,
+            action: action,
+            variable: variable
         });
 
     } catch (error) {
