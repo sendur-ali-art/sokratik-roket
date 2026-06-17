@@ -41,7 +41,7 @@ app.post('/api/chat', async (req, res) => {
             } else if (obs === "Etkilemedi.") {
                 if (isEffective) {
                     return res.json({
-                        reply: `Buna emin misin ${studentName}? Fizik kurallarına göre bu değişkenin roketin düştüğü yeri KESİNLİKLE değiştirmesi gerekir. Bence diğer ayarları sabit tutup bu değişkeni bir kez daha test etmelisin!`,
+                        reply: `Buna emin misin ${studentName}?  Bence diğer ayarları sabit tutup bu değişkeni bir kez daha test etmelisin!`,
                         action: "NONE", variable: "NONE", hintGiven: true
                     });
                 } else {
