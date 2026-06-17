@@ -14,53 +14,73 @@ const openai = new OpenAI({
 app.post('/api/chat', async (req, res) => {
     try {
         const { message, context, history = [] } = req.body;
+        const msg = message.trim().toLowerCase();
         
-        const systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın.
+        let systemPrompt = "";
+        let useTools = false;
 
---- FİZİKSEL GERÇEKLİK ---
-Öğrencinin son test ettiği değişken: "${context.activeTestVariable}"
-Matematiksel Gerçek: Bu değişken menzili ${context.isEffectiveTruth ? "ETKİLER" : "HİÇ ETKİLEMEZ"}.
-Şu an AÇIK olan sürgüler: [${context.unlockedVariables}]
-Öğrenci 3 Temel Değişkeni de buldu mu?: ${context.hasAllMainVariables ? "EVET" : "HAYIR"}
-
---- GÖREVLERİN VE KURALLAR ---
-1. YENİ SÜRGÜ AÇMA: Öğrenci Rüzgar, Hacim, Sıcaklık, Kütle, Hız vb. herhangi bir şeyi test etmek isterse KESİNLİKLE 'show_slider' aracını (tool) kullan! AÇIK olanlara çağırma.
-
-2. ÖĞRENCİ GÖZLEM YAPTIYSA ("Etkiledi" / "Etkilemedi" dediğinde):
-   Öğrencinin söylediği ile Matematiksel Gerçekliğini karşılaştır.
-   
-   - DURUM A (Doğru Bildi ve Değişken ETKİLİ BİR ŞEY): Öğrenci "Etkiledi" dedi ve Matematiksel Gerçek "ETKİLER" ise -> SADECE ŞUNU SÖYLE: "Harika bir bilimsel gözlem! Matematiksel modelde de bu değişken menzili doğrudan değiştirir. Peki uçuşu etkileyecek BAŞKA ne olabilir?" (Sakın sürtünmesiz ortamdan bahsetme!)
-   
-   - DURUM B (Doğru Bildi ve Değişken ETKİSİZ BİR ŞEY): Öğrenci "Etkilemedi" dedi ve Matematiksel Gerçek "HİÇ ETKİLEMEZ" ise -> ŞUNU SÖYLE: "Mükemmel bir tespit! Hatırlarsan en başta bu laboratuvarın 'sürtünmesiz ve ideal bir ortam' olduğunu konuşmuştuk. İşte bu yüzden test ettiğin bu değişken menzile etki etmiyor. Peki sence uçuşu gerçekten etkileyecek BAŞKA ne olabilir?"
-
-   - DURUM C (Yanlış Bildi): Öğrencinin söylediği ile Matematiksel Gerçek uyuşmuyorsa -> Cevabı ASLA verme! Sadece: "Buna emin misin? Bence diğer ayarları sabit tutup bu değişkeni bir kez daha test etmelisin!" de.
-     
-   - DURUM D (Emin Değil): Öğrenci "Emin değilim" derse -> "Bilim deneme yanılma işidir. Diğer ayarları sabit bırakıp tekrar ateşle." de.
-
-3. "BAŞKA YOK" DURUMU:
-   Öğrenci "Başka yok" derse, YUKARIDAKİ "Öğrenci 3 Temel Değişkeni de buldu mu?" bilgisini KONTROL ET:
-   - Eğer EVET yazıyorsa -> "Harika! Formülün tüm parçalarını buldun. Şimdi bu 3 değişkeni (Açı, Hız, İvme) en doğru şekilde ayarlayarak 150m ilerideki hedefi tam isabetle vurma zamanı! Başarılar!" de.
-   - Eğer HAYIR yazıyorsa -> "Emin misin? Bence formülde menzili doğrudan etkileyen çok temel bir fizik kuralı daha eksik. Biraz daha düşün." de.
-
-4. "BAŞKA VAR" veya "EMİN DEĞİLİM" DURUMU:
-   Öğrenci "Başka var" veya "Emin değilim" derse -> "Harika, bilim sorgulamaktır! Aklına ne geliyor? Söyle, sürgüsünü açıp test edelim." de.
-
-Çok doğal, dostane ve öğretici bir Türkçe kullan.
-`;
+        // KURŞUN GEÇİRMEZ ALGORİTMA: Yapay zeka karar vermiyor, biz onu tek bir senaryoya zorluyoruz!
+        if (msg.includes("etkiledi") && !msg.includes("etkilemedi")) {
+            if (context.isEffectiveTruth === true || context.isEffectiveTruth === "true") {
+                // Doğru Bildi (Etkili değişken)
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci "${context.activeTestVariable}" değişkeninin menzili etkilediğini doğru saptadı. 
+                Ona bu gözlemini onaylayan samimi bir tebrik cümlesi kur ve KESİNLİKLE şu soruyla bitir: "Peki sence uçuşu etkileyecek BAŞKA ne olabilir?"
+                SAKIN sürtünmesiz/ideal ortam açıklaması yapma, çünkü bu değişken zaten etkilidir!`;
+            } else {
+                // Yanlış Bildi (Etkisiz değişkeni etkiledi sandı)
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci "${context.activeTestVariable}" değişkeninin menzili etkilediğini sandı fakat bu değişken etkisizdir.
+                Görevin öğrenciye KESİNLİKLE şu yanıtı vermektir: "Buna emin misin? Bence aynı anda birden fazla ayarla oynadın. Diğerlerini sabit tutup SADECE bu ayarı değiştirerek tekrar denemelisin!"`;
+            }
+        } 
+        else if (msg.includes("etkilemedi")) {
+            if (context.isEffectiveTruth === true || context.isEffectiveTruth === "true") {
+                // Yanlış Bildi (Etkili değişkene etkilemedi dedi)
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci "${context.activeTestVariable}" ayarının menzili etkilemediğini sandı fakat bu değişken KESİNLİKLE etkilidir.
+                Görevin öğrenciye KESİNLİKLE tam olarak şu yanıtı vermektir: "Buna emin misin? Bence diğer ayarları sabit tutup bu değişkeni bir kez daha test etmelisin!"`;
+            } else {
+                // Doğru Bildi (Etkisiz değişkenin etkilemediğini saptadı)
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci "${context.activeTestVariable}" değişkeninin menzili etkilemediğini doğru bildi.
+                Görevin onu tebrik etmek ve KESİNLİKLE şu açıklamayı yaparak bitirmektir: "Mükemmel bir tespit! Hatırlarsan en başta bu laboratuvarın 'sürtünmesiz ve ideal bir ortam' olduğunu konuşmuştuk. İşte bu yüzden test ettiğin bu değişken menzile etki etmiyor. Peki sence uçuşu gerçekten etkileyecek BAŞKA ne olabilir?"`;
+            }
+        } 
+        else if (msg.includes("emin değilim")) {
+            systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci emin olmadığını belirtti. Görevin ona tam olarak şu yanıtı vermektir: "Bilim deneme yanılma işidir. Diğer ayarları sabit bırakıp tekrar ateşle."`;
+        } 
+        else if (msg.includes("başka yok")) {
+            if (context.hasAllMainVariables === true || context.hasAllMainVariables === "true") {
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci tüm ana parametreleri (Açı, Hız, İvme) başarıyla buldu ve başka yok dedi.
+                Görevin ona coşkulu bir başarı mesajı vererek şunu demektir: "Harika! Formülün tüm parçalarını buldun. Şimdi bu 3 değişkeni (Açı, Hız, İvme) en doğru şekilde ayarlayarak 150m ilerideki hedefi tam isabetle vurma zamanı! Başarılar!"`;
+            } else {
+                systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci henüz tüm değişkenleri bulamadığı halde başka yok dedi. Görevin ona şunu demektir: "Emin misin? Bence formülde menzili doğrudan etkileyen çok temel bir fizik kuralı daha eksik. Biraz daha düşün."`;
+            }
+        } 
+        else if (msg.includes("başka var")) {
+            systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrenci yeni şeyler arıyor. Görevin ona tam olarak şunu demektir: "Harika, bilim sorgulamaktır! Aklına ne geliyor? Söyle, sürgüsünü açıp test edelim."`;
+        } 
+        else {
+            // Genel sohbet, serbest fikir beyanları veya sürgü açma istekleri
+            useTools = true;
+            systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Görevin öğrencinin fikirlerini dinlemek, onları test etmeye teşvik etmek ve eğer yeni bir sürgü açmak istiyorsa 'show_slider' aracını kullanmaktır. Doğal, samimi bir Türkçe kullan.
+            
+            FİZİKSEL MODEL:
+            - Menzili KESİNLİKLE ETKİLEYENLER: Fırlatma Açısı, İlk Hız, Yerçekimi İvmesi.
+            - Bunlar dışındaki her şey (Hacim, Rüzgar, Kütle vb.) menzili ETKİLEMEZ.
+            
+            ÖĞRETMENLİK KURALLARI:
+            - Öğrenci bir değişkeni test etmek isterse peşinen etkiler/etkilemez deme! "Harika fikir, sürgüsünü açalım mı?" de ve aracı tetikle.
+            - Şu an açık sürgüler: [${context.unlockedVariables}]. Zaten açık olan bir şeyi 'show_slider' ile tekrar AÇMA! "Bu zaten sol panelde açık" de.`;
+        }
 
         const tools = [
             {
                 type: "function",
                 function: {
                     name: "show_slider",
-                    description: "Öğrenci ekranda AÇIK OLMAYAN HERHANGİ BİR değişkeni (Hız, İvme, Hacim, Rüzgar, Kütle vb. ne isterse) test etmek istediğinde bu fonksiyonu çağır. AÇIK olanlara çağırma.",
+                    description: "Öğrenci ekranda AÇIK OLMAYAN yeni bir değişkeni (İlk Hız, Yerçekimi İvmesi, Hacim, Rüzgar vb.) açmak istediğinde çalıştır.",
                     parameters: {
                         type: "object",
                         properties: {
-                            variable_name: {
-                                type: "string",
-                                description: "Ekranda açılacak değişkenin adı. Öğrenci ne söylediyse birebir onu yaz."
-                            }
+                            variable_name: { type: "string", description: "Açılacak değişkenin adı. Öğrenci ne dediyse birebir aynısı." }
                         },
                         required: ["variable_name"]
                     }
@@ -77,34 +97,26 @@ Matematiksel Gerçek: Bu değişken menzili ${context.isEffectiveTruth ? "ETKİL
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: messages,
-            tools: tools,
-            tool_choice: "auto"
+            tools: useTools ? tools : undefined,
+            tool_choice: useTools ? "auto" : undefined
         });
 
         const responseMessage = response.choices[0].message;
-        
         let replyText = responseMessage.content || "";
         let action = "NONE";
         let variable = "NONE";
 
-        if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+        if (useTools && responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
             const toolCall = responseMessage.tool_calls[0];
             if (toolCall.function.name === "show_slider") {
                 const args = JSON.parse(toolCall.function.arguments);
                 action = "SHOW_SLIDER";
                 variable = args.variable_name; 
-                
-                if (!replyText) {
-                    replyText = `Harika bir fikir! ${variable} ayarını ekrana getiriyorum. Hemen değerini değiştirip test edelim.`;
-                }
+                if (!replyText) replyText = `Harika bir fikir! ${variable} ayarını ekrana getiriyorum. Hemen değerini değiştirip test edelim.`;
             }
         }
 
-        res.json({
-            reply: replyText,
-            action: action,
-            variable: variable
-        });
+        res.json({ reply: replyText, action: action, variable: variable });
 
     } catch (error) {
         console.error(error);
