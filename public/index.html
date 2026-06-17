@@ -31,6 +31,7 @@
         .modal { display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%; background: rgba(47, 54, 64, 0.95); border: 2px solid #e1b12c; border-radius: 10px; padding: 20px; z-index: 100; box-sizing: border-box; overflow-y: auto;}
         #hud { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; color: #00a8ff; font-family: monospace; font-size: 14px; pointer-events: none;}
         
+        /* Dashboard Stilleri */
         .dashboard-card { background: #353b48; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #0097e6; }
         .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
     </style>
@@ -106,13 +107,12 @@
         let timeData = { lastHintTime: null, reactionTimes: [] };
         let massTested = false;
         
-        // YENİ: Hangi sürgünün en son hareket ettirildiğini hafızada tutuyoruz
         let currentTestVariable = "Fırlatma Açısı";
         let chatMemory = [];
 
         function updateAngleUI(val) {
             document.getElementById('angleVal').innerText = val;
-            currentTestVariable = "Fırlatma Açısı"; // Açı değiştiğini kaydet
+            currentTestVariable = "Fırlatma Açısı"; 
             if(!isLaunched) {
                 rocketGroup.rotation.z = -((Math.PI/2) - (val * (Math.PI / 180)));
                 renderer.render(scene, camera); 
@@ -143,7 +143,7 @@
             let min=1, max=100, val=50, unit="";
             if(safeNameStr.includes("hız") || safeNameStr.includes("itme")) { min=10; max=100; val=50; unit=" m/s"; }
             else if(safeNameStr.includes("yerçekimi") || safeNameStr.includes("ivme")) { min=1; max=25; val=9.8; unit=" m/s²"; }
-            else if(safeNameStr.includes("kütle") || safeNameStr.includes("ağırlık") || safeNameStr.includes("hacim")) { min=1; max=1000; val=10; unit=" kg/br"; }
+            else if(safeNameStr.includes("kütle") || safeNameStr.includes("ağırlık") || safeNameStr.includes("hacim") || safeNameStr.includes("rüzgar")) { min=1; max=1000; val=10; unit=" br"; }
             else { min=0; max=100; val=50; unit=""; }
 
             group.innerHTML = `
@@ -156,7 +156,7 @@
 
         function updateValue(id, val, originalName) {
             document.getElementById(id + 'Val').innerText = val;
-            currentTestVariable = originalName; // Hangi sürgüyle oynandığını kaydet
+            currentTestVariable = originalName; 
             
             const safeNameStr = originalName.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
             if(safeNameStr.includes("hız") || safeNameStr.includes("itme")) v0 = parseFloat(val);
@@ -164,14 +164,13 @@
             if(safeNameStr.includes("kütle") || safeNameStr.includes("ağırlık") || safeNameStr.includes("hacim") || safeNameStr.includes("rüzgar")) massTested = true;
         }
 
-        // YENİ: Butonlara tıklanınca çalışacak ve butonu yok edecek akıllı fonksiyon
         async function sendChat(forcedMessage = null, btnContainer = null) {
             let message = "";
             const input = document.getElementById('userInput');
             
             if (forcedMessage) {
                 message = forcedMessage;
-                if (btnContainer) btnContainer.style.display = 'none'; // Tıklanan buton grubunu gizle
+                if (btnContainer) btnContainer.style.display = 'none'; 
             } else {
                 message = input.value.trim();
                 input.value = '';
@@ -183,15 +182,21 @@
             chatMemory.push({role: "user", content: message});
             if(chatMemory.length > 6) chatMemory.shift();
 
-            // JS GÜCÜ: Test edilen değişkenin FİZİKSEL olarak etkili olup olmadığını JS belirliyor, yapay zeka değil!
+            // JS GÜCÜ: Fiziği biz biliyoruz!
             const safeNameStr = currentTestVariable.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
-            const isEffective = !(safeNameStr.includes("kütle") || safeNameStr.includes("hacim") || safeNameStr.includes("rüzgar") || safeNameStr.includes("boyut"));
+            const isEffective = !(safeNameStr.includes("kütle") || safeNameStr.includes("hacim") || safeNameStr.includes("rüzgar") || safeNameStr.includes("boyut") || safeNameStr.includes("ağırlık"));
+
+            // Tüm ana değişkenler bulundu mu kontrolü
+            const hasV0 = unlockedVariables.some(v => v.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase().includes("hız"));
+            const hasG = unlockedVariables.some(v => v.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase().includes("ivme"));
+            const hasAllMainVariables = hasV0 && hasG;
 
             const currentContext = {
                 distance: lastDistance.toFixed(1),
                 unlockedVariables: unlockedVariables.join(", "),
-                activeTestVariable: currentTestVariable, // Frontend'den Backend'e anlık bilgi
-                isEffectiveTruth: isEffective            // Frontend'den Backend'e fizik gerçeği
+                activeTestVariable: currentTestVariable,
+                isEffectiveTruth: isEffective,
+                hasAllMainVariables: hasAllMainVariables
             };
             
             try {
@@ -214,9 +219,20 @@
         }
 
         function addMsg(type, text) {
+            let finalHtml = text;
+            
+            // YENİ: Yapay zeka "BAŞKA ne olabilir" diye sorduğunda 3 yeni buton otomatik eklenir!
+            if (type === 'ai-msg' && text.includes("BAŞKA ne olabilir")) {
+                finalHtml += `<div style="margin-top:15px; display:flex; gap:8px;">
+                    <button onclick="sendChat('Başka var', this.parentElement)" style="flex:1; padding:8px; background:#0097e6; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">➕ Başka Var</button>
+                    <button onclick="sendChat('Başka yok', this.parentElement)" style="flex:1; padding:8px; background:#e84118; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">🛑 Başka Yok</button>
+                    <button onclick="sendChat('Emin değilim', this.parentElement)" style="flex:1; padding:8px; background:#7f8c8d; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">🤔 Emin Değilim</button>
+                </div>`;
+            }
+
             const div = document.createElement('div');
             div.className = 'msg ' + type;
-            div.innerHTML = text;
+            div.innerHTML = finalHtml;
             document.getElementById('chat-history').appendChild(div);
             div.scrollIntoView();
         }
@@ -268,7 +284,8 @@
 
             if (status === "BAŞARILI") {
                 if (!(hasV0 && hasG)) {
-                    aiMessage = "Tebrikler, hedefi tam isabetle vurdun! Peki sence uçuş mesafesini etkileyebilecek başka ne olabilir?";
+                    aiMessage = "Tebrikler, hedefi tam isabetle vurdun! Peki sence uçuş mesafesini etkileyebilecek BAŞKA ne olabilir?";
+                    timeData.lastHintTime = Date.now(); 
                 } else {
                     aiMessage = "Tebrikler! Ana değişkenleri keşfettik ve hedefi vurduk. Matematiksel modeli ve başarının raporunu inceleyebilirsin.";
                     document.getElementById('reportBtn').style.display = 'block';
@@ -276,7 +293,6 @@
                     generateReport();
                 }
             } else {
-                // YENİ YAKLAŞIM: Roket düştüğünde arayüz, öğrencinin test ettiği değişkeni algılar ve 3 buton sunar!
                 aiMessage = `Atış tamamlandı. Roket ${currentD} metre mesafeye gitti. En son <b>"${currentTestVariable}"</b> ayarı ile oynadığını görüyorum. Sence bu değişiklik menzili etkiledi mi?`;
                 
                 aiMessage += `<div style="margin-top:15px; display:flex; gap:8px;">
@@ -289,7 +305,6 @@
             addMsg('sys-msg', `💥 <b>${status}</b>`);
             addMsg('ai-msg', aiMessage);
             
-            // Sadece metni hafızaya al, html butonlarını alma
             chatMemory.push({role: "assistant", content: aiMessage.split("<div")[0]});
             if(chatMemory.length > 6) chatMemory.shift();
             
@@ -301,23 +316,73 @@
             renderer.render(scene, camera);
         }
 
+        // DETAYLI SERTİFİKA / RAPOR GERİ GELDİ!
         function generateReport() {
             let totalShots = launchHistory.length;
+            
+            let angles = launchHistory.map(h => h.angle);
+            let minAngle = Math.min(...angles), maxAngle = Math.max(...angles);
+            let angleStr = `Ağırlıklı olarak <b>${minAngle}° ile ${maxAngle}°</b> bandında denemeler yaptın.`;
+
+            let highSpeedCount = launchHistory.filter(h => h.v0 > 60).length;
+            let speedPercent = totalShots > 0 ? Math.round((highSpeedCount / totalShots) * 100) : 0;
+            let speedStr = speedPercent > 50 ? 
+                `Atışlarının <b>%${speedPercent}'i</b> yüksek hızlı (>60 m/s) fırlatmalardı.` : 
+                `Atışlarının <b>%${100 - speedPercent}'i</b> düşük, kontrollü hızlardaydı.`;
+
+            let alienGravityCount = launchHistory.filter(h => h.gravity !== 9.8).length;
+            let gravityStr = alienGravityCount > 0 ? 
+                `<b>${alienGravityCount} atışta</b> yerçekimini değiştirerek farklı gezegenleri simüle ettin.` : 
+                `Tüm atışlarını Dünya standartlarında (9.8 m/s²) gerçekleştirdin.`;
+
+            let massStr = massTested ? 
+                "Fiziksel olarak etkisiz değişkenleri (Kütle, Hacim, Rüzgar vb.) test ederek sürtünmesiz laboratuvar kurallarını bizzat kanıtladın. Harika bir bilimsel duruş! 🎯" : 
+                "Menzili etkilemeyen değişkenlerle vakit kaybetmedin, doğrudan formüldeki hareket denklemlerine odaklandın.";
+            
+            let avgTimeStr = "Ölçülemedi";
+            if (timeData.reactionTimes.length > 0) {
+                let avg = timeData.reactionTimes.reduce((a, b) => a + b, 0) / timeData.reactionTimes.length;
+                avgTimeStr = "<b>" + avg.toFixed(1) + " Saniye</b>";
+            }
+
             let finalShot = launchHistory[launchHistory.length - 1] || {angle: 45, v0: 50, gravity: 9.8};
+
             document.getElementById('reportContent').innerHTML = `
                 <div class="dashboard-grid">
                     <div class="dashboard-card" style="grid-column: 1 / -1; display:flex; justify-content:space-between; align-items:center;">
                         <div>
-                            <h3 style="margin-top:0; color:#e1b12c;">📊 Genel Performans</h3>
-                            <p style="margin-bottom:0;">Toplam fırlatılan roket: <b>${totalShots}</b></p>
+                            <h3 style="margin-top:0; color:#e1b12c;">📊 Laboratuvar Özeti</h3>
+                            <p style="margin-bottom:0;">Toplam Atış: Hedefi tüm parametrelerle vurana kadar <b>${totalShots}</b> roket fırlattın.</p>
+                            <p style="margin-top:5px;">Sokratik Çıkarım Ortalaman: ${avgTimeStr}</p>
                         </div>
                         <div style="text-align:right; border-left:2px solid #718093; padding-left:15px;">
-                            <h3 style="margin-top:0; color:#27ae60;">🏆 Kusursuz Atış</h3>
+                            <h3 style="margin-top:0; color:#27ae60;">🏆 Mükemmel Atış</h3>
                             <p style="margin:0; font-size:16px;">Açı: <b>${finalShot.angle}°</b> | Hız: <b>${finalShot.v0}</b> m/s | İvme: <b>${finalShot.gravity}</b> m/s²</p>
                         </div>
                     </div>
+                    
+                    <div class="dashboard-card" style="border-left-color: #f39c12;">
+                        <h3 style="margin-top:0; color:#f39c12;">📐 Açı Optimizasyonu</h3>
+                        <p>${angleStr}</p>
+                    </div>
+
+                    <div class="dashboard-card" style="border-left-color: #e84118;">
+                        <h3 style="margin-top:0; color:#e84118;">🚀 Hız Profili</h3>
+                        <p>${speedStr}</p>
+                    </div>
+
+                    <div class="dashboard-card" style="border-left-color: #00a8ff;">
+                        <h3 style="margin-top:0; color:#00a8ff;">🌍 Gezegenler Arası Simülasyon</h3>
+                        <p>${gravityStr}</p>
+                    </div>
+
+                    <div class="dashboard-card" style="border-left-color: #9b59b6;">
+                        <h3 style="margin-top:0; color:#9b59b6;">💡 Kavramsal Kazanımlar</h3>
+                        <p>${massStr}</p>
+                    </div>
                 </div>
             `;
+            
             openReport();
         }
 
