@@ -31,7 +31,6 @@
         .modal { display: none; position: absolute; top: 10%; left: 10%; width: 80%; height: 80%; background: rgba(47, 54, 64, 0.95); border: 2px solid #e1b12c; border-radius: 10px; padding: 20px; z-index: 100; box-sizing: border-box; overflow-y: auto;}
         #hud { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; color: #00a8ff; font-family: monospace; font-size: 14px; pointer-events: none;}
         
-        /* Dashboard Stilleri */
         .dashboard-card { background: #353b48; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #0097e6; }
         .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
     </style>
@@ -127,6 +126,9 @@
             if (unlockedVariables.includes(name)) return;
             unlockedVariables.push(name);
             
+            // YENİ: Öğrenci yeni bir sürgü açtırdığında, otomatik olarak ilgisi o sürgüye geçmiştir
+            currentTestVariable = name;
+            
             if (timeData.lastHintTime) {
                 let reaction = (Date.now() - timeData.lastHintTime) / 1000;
                 timeData.reactionTimes.push(reaction);
@@ -182,11 +184,9 @@
             chatMemory.push({role: "user", content: message});
             if(chatMemory.length > 6) chatMemory.shift();
 
-            // JS GÜCÜ: Fiziği biz biliyoruz!
             const safeNameStr = currentTestVariable.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
             const isEffective = !(safeNameStr.includes("kütle") || safeNameStr.includes("hacim") || safeNameStr.includes("rüzgar") || safeNameStr.includes("boyut") || safeNameStr.includes("ağırlık"));
 
-            // Tüm ana değişkenler bulundu mu kontrolü
             const hasV0 = unlockedVariables.some(v => v.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase().includes("hız"));
             const hasG = unlockedVariables.some(v => v.replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase().includes("ivme"));
             const hasAllMainVariables = hasV0 && hasG;
@@ -221,7 +221,6 @@
         function addMsg(type, text) {
             let finalHtml = text;
             
-            // YENİ: Yapay zeka "BAŞKA ne olabilir" diye sorduğunda 3 yeni buton otomatik eklenir!
             if (type === 'ai-msg' && text.includes("BAŞKA ne olabilir")) {
                 finalHtml += `<div style="margin-top:15px; display:flex; gap:8px;">
                     <button onclick="sendChat('Başka var', this.parentElement)" style="flex:1; padding:8px; background:#0097e6; border:none; color:white; border-radius:4px; cursor:pointer; font-weight:bold; font-size:12px;">➕ Başka Var</button>
@@ -316,7 +315,6 @@
             renderer.render(scene, camera);
         }
 
-        // DETAYLI SERTİFİKA / RAPOR GERİ GELDİ!
         function generateReport() {
             let totalShots = launchHistory.length;
             
