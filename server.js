@@ -1,13 +1,13 @@
 const express = require('express');
 const cors = require('cors');
 const { OpenAI } = require('openai');
-const http = require('http'); // YENİ: Socket.io için eklendi
-const { Server } = require('socket.io'); // YENİ: Socket.io için eklendi
+const http = require('http'); 
+const { Server } = require('socket.io'); 
 const path = require('path');
 
 const app = express();
-const server = http.createServer(app); // YENİ: Express sunucusu sarmalandı
-const io = new Server(server, { cors: { origin: '*' } }); // YENİ: Gerçek zamanlı köprü kuruldu
+const server = http.createServer(app); 
+const io = new Server(server, { cors: { origin: '*' } }); 
 
 app.use(cors());
 app.use(express.json());
@@ -21,9 +21,9 @@ const openai = new OpenAI({
 // ÖĞRETMEN PANELİ ROTALARI VE SOCKET.IO (HAFİYE) MANTIĞI
 // =========================================================================
 
-// Öğretmen paneline giriş rotası
+// Öğretmen paneline giriş rotası (Dosyayı public klasöründen çeker)
 app.get('/ogretmen', (req, res) => {
-    res.sendFile(path.join(__dirname, 'teacher.html'));
+    res.sendFile(path.join(__dirname, 'public', 'teacher.html'));
 });
 
 // Öğrenci durumlarını hafızada tutan depo
@@ -93,7 +93,7 @@ app.post('/api/chat', async (req, res) => {
             } else if (obs === "Etkilemedi.") {
                 if (isEffective) {
                     return res.json({
-                        reply: `Buna emin misin ${studentName}?  Bence diğer ayarları sabit tutup bu değişkeni bir kez daha test etmelisin!`,
+                        reply: `Buna emin misin ${studentName}? Bence diğer ayarları sabit tutup bu değişkeni bir kez daha test etmelisin!`,
                         action: "NONE", variable: "NONE", hintGiven: true
                     });
                 } else {
@@ -197,4 +197,4 @@ app.post('/api/chat', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Sunucu aktif.`)); // DÜZELTME: app.listen yerine server.listen yapıldı
+server.listen(PORT, () => console.log(`Sunucu aktif.`));
