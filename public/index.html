@@ -192,11 +192,10 @@
             }
         };
 
-        // Hafiyeyi her 5 saniyede bir durumu kontrol etmesi için kuruyoruz
         setInterval(() => hafiye.evaluate(), 5000);
 
         // ====================================================================
-        // ESKİ KODLARIN - HİÇBİR MANTIĞI BOZULMADI
+        // TEMEL DEĞİŞKENLER VE LOBİ MANTIĞI
         // ====================================================================
         let userName = "";
         let isNameSet = false;
@@ -229,7 +228,7 @@
             if(!isLaunched) {
                 rocketGroup.rotation.z = -((Math.PI/2) - theta);
             }
-            hafiye.sliderChanged(); // HAFİYE BİLDİRİMİ
+            hafiye.sliderChanged(); 
         }
 
         function updateSimSpeed() { timeStep = document.getElementById('spdSlow').checked ? 0.015 : 0.05; }
@@ -281,7 +280,7 @@
             `;
             container.appendChild(group);
             
-            hafiye.newVariable(); // HAFİYE BİLDİRİMİ
+            hafiye.newVariable(); 
         }
 
         function updateValue(id, val, originalName) {
@@ -292,7 +291,7 @@
             if(safeNameStr.includes("hız") || safeNameStr.includes("itme")) v0 = parseFloat(val);
             if(safeNameStr.includes("yerçekimi") || safeNameStr.includes("ivme")) gravity = parseFloat(val);
             
-            hafiye.sliderChanged(); // HAFİYE BİLDİRİMİ
+            hafiye.sliderChanged(); 
         }
 
         async function sendChat(forcedMessage = null, btnContainer = null) {
@@ -308,7 +307,7 @@
             }
             if(!message) return;
 
-            hafiye.recordChat(); // HAFİYE BİLDİRİMİ
+            hafiye.recordChat(); 
             addMsg('user-msg', message);
             
             if (!isNameSet) {
@@ -320,7 +319,7 @@
                 addMsg('ai-msg', welcomeMsg);
                 fullChatHistory.push("Asistan: " + welcomeMsg.replace(/<[^>]*>?/gm, ''));
                 
-                if(socket) socket.emit('student_join', { name: userName }); // HAFİYE KİMLİK BİLDİRİMİ
+                if(socket) socket.emit('student_join', { name: userName }); 
                 return;
             }
 
@@ -396,7 +395,6 @@
             const sender = type === 'user-msg' ? userName : 'Asistan';
             fullChatHistory.push(`${sender}: ${cleanText}`);
             
-            // HAFİYE: Mesajı Öğretmen Paneline de Gönder
             if(socket && isNameSet) socket.emit('chat_message', { sender: sender, text: cleanText });
         }
 
@@ -409,7 +407,7 @@
 
         function launchRocket() {
             if(isCooldown) return;
-            hafiye.recordLaunch(); // HAFİYE BİLDİRİMİ
+            hafiye.recordLaunch(); 
             
             attempts++;
             isLaunched = true;
@@ -431,7 +429,7 @@
             flightStatus = status;
             if(status !== "BAŞARILI") {
                 consecutiveFailures++; 
-                hafiye.ping(); // Karavana atışı değerlendir
+                hafiye.ping(); 
             } else {
                 consecutiveFailures = 0;
             }
@@ -572,45 +570,123 @@
         function openReport() { document.getElementById('reportModal').style.display = 'block'; }
         function closeReport() { document.getElementById('reportModal').style.display = 'none'; }
 
-        // THREE.JS KURULUMU
-        let scene, camera, renderer, rocketGroup, targetPad, particleSystem;
+        // ==========================================
+        // YEPYENİ 3D NASA / SpaceX GÖRSELLİK! 
+        // ==========================================
+        let scene, camera, renderer, rocketGroup, targetPad, particleSystem, controls;
+        
         function init3D() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87CEEB);
+            scene.background = new THREE.Color(0x87CEEB); 
+            scene.fog = new THREE.Fog(0x87CEEB, 150, 500); 
+            
             camera = new THREE.PerspectiveCamera(60, (window.innerWidth*0.7)/window.innerHeight, 0.1, 1000);
-            camera.position.set(25, 30, 150);
+            camera.position.set(25, 40, 120);
+            
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('sim-canvas'), antialias: true });
             renderer.setSize(window.innerWidth * 0.7, window.innerHeight);
-            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            
+            // KONTROLLER EKLENDİ VE DAMPING AÇILDI!
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.target.set(25, 0, 0); 
+            controls.enableDamping = true; // Çok daha pürüzsüz ve gerçekçi kamera dönüşü
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 600; // Uzaya çok uçmayı engeller
             controls.update();
 
-            const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshLambertMaterial({color: 0x27ae60}));
-            ground.rotation.x = -Math.PI/2; scene.add(ground);
-            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-            let dirLight = new THREE.DirectionalLight(0xffffff, 0.9); dirLight.position.set(50, 100, 50); scene.add(dirLight);
+            // Çöl/Kum Zemini
+            const terrainGeo = new THREE.PlaneGeometry(2000, 2000);
+            const terrainMat = new THREE.MeshLambertMaterial({color: 0xa69371});
+            const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+            terrain.rotation.x = -Math.PI / 2;
+            terrain.position.y = -0.1;
+            scene.add(terrain);
+
+            // Daraltılmış Atış Pisti
+            const trackGeo = new THREE.PlaneGeometry(350, 60);
+            const trackMat = new THREE.MeshLambertMaterial({color: 0x7f8c8d});
+            const track = new THREE.Mesh(trackGeo, trackMat);
+            track.rotation.x = -Math.PI / 2;
+            track.position.set(75, 0, 0); 
+            scene.add(track);
+
+            // Pist Çizgileri
+            const lineMatWhite = new THREE.MeshBasicMaterial({color: 0xffffff});
+            const lineMatYellow = new THREE.MeshBasicMaterial({color: 0xf1c40f});
+            
+            const leftLine = new THREE.Mesh(new THREE.PlaneGeometry(350, 0.6), lineMatWhite);
+            leftLine.rotation.x = -Math.PI / 2; leftLine.position.set(75, 0.05, -28); scene.add(leftLine);
+            
+            const rightLine = new THREE.Mesh(new THREE.PlaneGeometry(350, 0.6), lineMatWhite);
+            rightLine.rotation.x = -Math.PI / 2; rightLine.position.set(75, 0.05, 28); scene.add(rightLine);
+
+            for(let i=-100; i<=250; i+=10) {
+                let dash = new THREE.Mesh(new THREE.PlaneGeometry(5, 0.5), lineMatYellow);
+                dash.rotation.x = -Math.PI / 2; dash.position.set(i, 0.05, 0); scene.add(dash);
+            }
+
+            for(let i=-100; i<=250; i+=25) {
+                let cross = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 60), new THREE.MeshBasicMaterial({color: 0x95a5a6}));
+                cross.rotation.x = -Math.PI / 2; cross.position.set(i, 0.02, 0); scene.add(cross);
+            }
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6)); 
+            let dirLight = new THREE.DirectionalLight(0xffffff, 0.8); 
+            dirLight.position.set(100, 150, 50); 
+            scene.add(dirLight);
             
             rocketGroup = new THREE.Group();
-            let body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 8, 16), new THREE.MeshLambertMaterial({color: 0xf1f2f6})); body.position.y = 4;
-            let nose = new THREE.Mesh(new THREE.ConeGeometry(1.5, 4, 16), new THREE.MeshLambertMaterial({color: 0xf39c12})); nose.position.y = 10;
-            rocketGroup.add(body); rocketGroup.add(nose);
-            rocketGroup.position.set(-50, 2, 0);
-            rocketGroup.rotation.z = -((Math.PI/2) - (45 * (Math.PI / 180)));
+            let bodyMat = new THREE.MeshStandardMaterial({color: 0xffffff, metalness: 0.2, roughness: 0.5});
+            let body = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 10, 32), bodyMat);
+            body.position.y = 5;
+            
+            let noseMat = new THREE.MeshStandardMaterial({color: 0xffffff, metalness: 0.2, roughness: 0.5});
+            let nose = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3, 32), noseMat);
+            nose.position.y = 11.5;
+            
+            let nozzleMat = new THREE.MeshStandardMaterial({color: 0x2c3e50, metalness: 0.8, roughness: 0.2});
+            let nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.2, 1.5, 32), nozzleMat);
+            nozzle.position.y = -0.75;
+
+            let finMat = new THREE.MeshStandardMaterial({color: 0x34495e, metalness: 0.5, roughness: 0.5});
+            for(let i=0; i<4; i++) {
+                let fin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2, 1.5), finMat);
+                fin.position.y = 1; fin.position.x = Math.cos(i * Math.PI / 2) * 1.5;
+                fin.position.z = Math.sin(i * Math.PI / 2) * 1.5; fin.rotation.y = -i * Math.PI / 2;
+                rocketGroup.add(fin);
+            }
+            
+            rocketGroup.add(body); rocketGroup.add(nose); rocketGroup.add(nozzle);
+            rocketGroup.position.set(startX, startY, 0);
+            rocketGroup.rotation.z = -((Math.PI/2) - theta);
             scene.add(rocketGroup);
             
-            targetPad = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 2, 32), new THREE.MeshLambertMaterial({color: 0xe74c3c}));
-            targetPad.position.set(100, 1, 0); scene.add(targetPad);
+            let padGroup = new THREE.Group();
+            let padMat = new THREE.MeshStandardMaterial({color: 0x95a5a6, metalness: 0.1, roughness: 0.8});
+            let basePad = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, 1, 32), padMat);
+            padGroup.add(basePad);
+            
+            let redMat = new THREE.MeshStandardMaterial({color: 0xe74c3c, metalness: 0.1, roughness: 0.8});
+            let bullseye = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 1.1, 32), redMat);
+            padGroup.add(bullseye);
+            
+            padGroup.position.set(100, 0.5, 0); 
+            targetPad = padGroup;
+            scene.add(targetPad);
 
             let pGeo = new THREE.BufferGeometry();
-            let pPos = new Float32Array(300 * 3); 
+            let pPos = new Float32Array(200 * 3); 
             pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-            particleSystem = new THREE.Points(pGeo, new THREE.PointsMaterial({color: 0xe67e22, size: 2.5, transparent: true, opacity: 0.8})); 
+            particleSystem = new THREE.Points(pGeo, new THREE.PointsMaterial({color: 0xff8800, size: 2.5, transparent: true, opacity: 0.8})); 
             scene.add(particleSystem);
-            renderer.render(scene, camera);
         }
 
         function animate() {
             requestAnimationFrame(animate);
+            
+            // Kamera hareketlerini her karede güncelle (Damping için şart)
+            if(controls) controls.update(); 
+
             if(isLaunched) {
                 time += timeStep;
                 let dx = v0 * Math.cos(theta) * time;
@@ -618,19 +694,23 @@
                 rocketGroup.position.x = startX + dx;
                 rocketGroup.position.y = startY + dy;
                 lastDistance = dx;
+                
+                // Rotasyon - Burnu hareket yönüne çevir
                 let vx = v0 * Math.cos(theta), vy = v0 * Math.sin(theta) - (gravity * time);
                 rocketGroup.rotation.z = -( (Math.PI/2) - Math.atan2(vy, vx) );
 
                 currentTrajectoryPoints.push(new THREE.Vector3(rocketGroup.position.x, rocketGroup.position.y, rocketGroup.position.z));
                 currentTrajectoryLine.geometry.setFromPoints(currentTrajectoryPoints);
 
+                // DÜZELTİLDİ: Gerçekçi yönlü egzoz alevi (Roketin tersine doğru saçar)
                 let positions = particleSystem.geometry.attributes.position.array;
                 for(let i=0; i<100; i++) {
-                    positions[i*3] = rocketGroup.position.x + (Math.random() - 0.5)*2;
-                    positions[i*3+1] = rocketGroup.position.y + (Math.random() - 0.5)*2;
+                    positions[i*3] = rocketGroup.position.x - Math.cos(Math.atan2(vy, vx)) * 1.5 + (Math.random() - 0.5)*2;
+                    positions[i*3+1] = rocketGroup.position.y - Math.sin(Math.atan2(vy, vx)) * 1.5 + (Math.random() - 0.5)*2;
                     positions[i*3+2] = rocketGroup.position.z + (Math.random() - 0.5)*2;
                 }
                 particleSystem.geometry.attributes.position.needsUpdate = true;
+                
                 document.getElementById('hud').innerText = `Menzil: ${dx.toFixed(1)} m | Yükseklik: ${rocketGroup.position.y.toFixed(1)} m`;
                 
                 if(rocketGroup.position.y < 1 && time > 0.5) {
@@ -638,11 +718,13 @@
                     resetRocket(hit ? "BAŞARILI" : "ÇAKILDI");
                 }
             }
+            
             renderer.render(scene, camera);
         }
 
         init3D(); 
         animate();
+        
         window.addEventListener('resize', () => {
             camera.aspect = (window.innerWidth*0.7)/window.innerHeight;
             camera.updateProjectionMatrix();
