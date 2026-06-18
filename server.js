@@ -1,8 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const { OpenAI } = require('openai');
+const http = require('http'); // YENİ: Socket.io için eklendi
+const { Server } = require('socket.io'); // YENİ: Socket.io için eklendi
+const path = require('path');
 
 const app = express();
+const server = http.createServer(app); // YENİ: Express sunucusu sarmalandı
+const io = new Server(server, { cors: { origin: '*' } }); // YENİ: Gerçek zamanlı köprü kuruldu
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public')); 
@@ -11,17 +17,63 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
+// =========================================================================
+// ÖĞRETMEN PANELİ ROTALARI VE SOCKET.IO (HAFİYE) MANTIĞI
+// =========================================================================
+
+// Öğretmen paneline giriş rotası
+app.get('/ogretmen', (req, res) => {
+    res.sendFile(path.join(__dirname, 'teacher.html'));
+});
+
+// Öğrenci durumlarını hafızada tutan depo
+const students = {}; 
+
+io.on('connection', (socket) => {
+    // Öğrenci ismini girdiğinde paneli haberdar et
+    socket.on('student_join', (data) => {
+        students[socket.id] = { id: socket.id, name: data.name, status: '🟢 Yeşil', shots: 0, foundVars: 0, chat: [] };
+        io.emit('teacher_update_all', Object.values(students));
+    });
+    
+    // Öğrencinin tarayıcısındaki Hafiye (Ajan) durum raporu yolladığında
+    socket.on('student_update', (data) => {
+        if(students[socket.id]) {
+            students[socket.id].status = data.status;
+            students[socket.id].shots = data.shots;
+            students[socket.id].foundVars = data.foundVars;
+            io.emit('teacher_update_student', students[socket.id]);
+        }
+    });
+
+    // Öğrenci veya Yapay Zeka bir mesaj yazdığında paneli haberdar et
+    socket.on('chat_message', (data) => {
+        if(students[socket.id]) {
+            const msgObj = { sender: data.sender, text: data.text, time: new Date().toLocaleTimeString('tr-TR') };
+            students[socket.id].chat.push(msgObj);
+            io.emit('teacher_chat_update', { id: socket.id, msg: msgObj });
+        }
+    });
+
+    // Öğrenci sayfayı yenilerse veya sekmeyi kapatırsa (Gri Koptu durumu)
+    socket.on('disconnect', () => {
+        if(students[socket.id]) {
+            students[socket.id].status = '⚪ Gri (Koptu)';
+            io.emit('teacher_update_student', students[socket.id]);
+        }
+    });
+});
+
+// =========================================================================
+// YAPAY ZEKA VE SOKRATİK MANTIK (ESKİ KODUN - BİREBİR AYNI VE DOKUNULMADI)
+// =========================================================================
+
 app.post('/api/chat', async (req, res) => {
     try {
         const { message, context, history = [] } = req.body;
         const msg = message.trim();
         const studentName = context.userName || "Öğrenci";
 
-        // =========================================================================
-        // BÖLÜM A: KESİN (DETERMİNİSTİK) BUTON YÖNLENDİRMELERİ (LLM KULLANILMAZ)
-        // =========================================================================
-        
-        // 1. Gözlem Butonları (Etkiledi, Etkilemedi, Emin Değilim)
         if (msg.startsWith("Gözlem:")) {
             const obs = msg.split(":")[1].trim();
             const isEffective = (context.isEffectiveTruth === true || context.isEffectiveTruth === "true");
@@ -58,7 +110,6 @@ app.post('/api/chat', async (req, res) => {
             }
         }
 
-        // 2. Fikir Butonları (Başka var, Başka yok, Emin değilim)
         if (msg.startsWith("Fikir:")) {
             const fikir = msg.split(":")[1].trim();
             if (fikir === "Başka yok") {
@@ -80,10 +131,6 @@ app.post('/api/chat', async (req, res) => {
                 });
             }
         }
-
-        // =========================================================================
-        // BÖLÜM B: SERBEST METİN İÇİN YAPAY ZEKA (LLM) KULLANIMI
-        // =========================================================================
         
         const systemPrompt = `Sen Sokratik bir fizik laboratuvarı asistanısın. Öğrencinin adı ${studentName}.
         
@@ -116,7 +163,7 @@ app.post('/api/chat', async (req, res) => {
         const aiMessages = [
             { role: "system", content: systemPrompt },
             ...history,
-            { role: "user", content: msg } // Gözlem: takısı olmayan normal metinler
+            { role: "user", content: msg } 
         ];
 
         const response = await openai.chat.completions.create({
@@ -150,4 +197,4 @@ app.post('/api/chat', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Sunucu aktif.`));
+server.listen(PORT, () => console.log(`Sunucu aktif.`)); // DÜZELTME: app.listen yerine server.listen yapıldı
